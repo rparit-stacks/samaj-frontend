@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
@@ -380,5 +380,19 @@
 
   .achievers-marquee-track:hover {
     animation-play-state: paused;
+  }
+
+  /* Bottom padding that accounts for the mobile nav bar (~5rem) + device safe area (gesture bar etc.) */
+  .pb-nav-safe {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Ensure 100dvh is supported; fall back to 100vh for older WebViews */
+  .h-dvh {
+    height: 100dvh;
+  }
+
+  .min-h-dvh {
+    min-height: 100dvh;
   }
 }

@@ -6,13 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, Shield, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { adminApi, fetchSetupStatus, recordAdminSessionExpiry } from "@/lib/api";
+import { adminAuthLogin, fetchSetupStatus, recordAdminSessionExpiry } from "@/lib/api";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -42,15 +43,12 @@ export default function AdminLogin() {
     setIsLoading(true);
     
     try {
-      const res = await adminApi<{
+      const res = await adminAuthLogin<{
         accessToken: string;
         refreshToken: string;
         expiresIn?: number;
         user: { role: string; id?: string };
-      }>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ identifier: formData.email, password: formData.password }),
-      });
+      }>({ identifier: formData.email, password: formData.password });
 
       const role = (res.user?.role ?? "").toUpperCase();
       if (role !== "ADMIN" && role !== "MODERATOR") {
@@ -65,7 +63,9 @@ export default function AdminLogin() {
       }
 
       toast.success("Login successful!");
-      navigate("/admin/dashboard");
+      setRedirecting(true);
+      // Small delay so the user sees the transition loader instantly.
+      window.setTimeout(() => navigate("/admin/dashboard"), 50);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -73,10 +73,20 @@ export default function AdminLogin() {
     }
   };
 
-  if (checkingSetup) {
+  if (checkingSetup || redirecting) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <p className="text-slate-400 text-sm">Loading…</p>
+        <div className="text-center">
+          <div className="mx-auto h-10 w-10 border-2 border-white/25 border-t-white rounded-full animate-spin" />
+          <p className="mt-4 text-slate-300 text-sm">
+            {redirecting ? "Preparing dashboard…" : "Loading…"}
+          </p>
+          {redirecting && (
+            <p className="mt-1 text-slate-500 text-xs">
+              Please wait while we load admin data.
+            </p>
+          )}
+        </div>
       </div>
     );
   }

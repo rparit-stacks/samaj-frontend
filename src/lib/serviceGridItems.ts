@@ -13,6 +13,9 @@ import {
   Trophy,
   Medal,
   BookOpen,
+  HandCoins,
+  Briefcase,
+  ClipboardList,
 } from "lucide-react";
 
 /** All app shortcuts shown on Dashboard and Services page */
@@ -37,4 +40,7 @@ export const SERVICE_GRID_ITEMS: ServiceGridItem[] = [
   { to: "/achievements?tab=mine", icon: Medal, label: "My achievements", color: "bg-amber-500/10 text-amber-800" },
   { to: "/achievements/new", icon: Trophy, label: "Add achievement", color: "bg-amber-500/10 text-amber-700" },
   { to: "/chat", icon: MessageCircle, label: "Chat", color: "bg-teal-500/10 text-teal-600" },
+  { to: "/donate", icon: HandCoins, label: "Donate", color: "bg-emerald-500/10 text-emerald-600" },
+  { to: "/business", icon: Briefcase, label: "Business", color: "bg-cyan-500/10 text-cyan-600" },
+  { to: "/jobs", icon: ClipboardList, label: "Jobs", color: "bg-violet-500/10 text-violet-600" },
 ];

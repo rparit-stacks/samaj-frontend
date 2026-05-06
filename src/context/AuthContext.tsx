@@ -2,12 +2,36 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import {
   authApi,
   userApi,
+  deviceTokenApi,
   recordUserSessionExpiry,
   refreshSession,
   startSessionKeepAlive,
   type AuthResponse,
   type UserResponse,
 } from "@/lib/api";
+
+/** Reads the FCM token injected by the Android WebView, if available. */
+function getNativeFcmToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Record<string, unknown>;
+  if (typeof w.__fcmToken === "string" && w.__fcmToken) return w.__fcmToken as string;
+  const native = w.SamajNative as Record<string, unknown> | undefined;
+  if (native && typeof native.getFcmToken === "function") {
+    const t = (native.getFcmToken as () => string)();
+    return t || null;
+  }
+  return null;
+}
+
+function registerFcmToken() {
+  const token = getNativeFcmToken();
+  if (token) deviceTokenApi.register(token).catch(() => {});
+}
+
+function unregisterFcmToken() {
+  const token = getNativeFcmToken();
+  if (token) deviceTokenApi.unregister(token).catch(() => {});
+}
 
 /**
  * Sync Auth user to UserService so user_profiles and user_settings have data.
@@ -121,6 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("samajUserId", res.user.id);
     }
     syncAuthUserToProfile(res.user);
+    // Register this device's FCM token with the backend so it can receive targeted push notifications
+    registerFcmToken();
   }, []);
 
   const login = useCallback(async (identifier: string, password: string) => {
@@ -129,6 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [completeSession]);
 
   const logout = useCallback(async () => {
+    // Unregister FCM token before clearing auth headers so the request can authenticate
+    unregisterFcmToken();
     try {
       await authApi.logout();
     } catch {

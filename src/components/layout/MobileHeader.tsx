@@ -24,7 +24,7 @@ export function MobileHeader({ title = "Samaj" }: MobileHeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 md:hidden">
-      <div className="glass border-b border-border/70">
+      <div className="bg-background/95 backdrop-blur-sm border-b border-border/70 pt-safe-top">
         <div className="grid grid-cols-[2.75rem_1fr_5.5rem] items-center h-14 px-2">
           {/* Left: hamburger */}
           <div className="flex justify-start">

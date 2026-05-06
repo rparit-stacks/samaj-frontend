@@ -5,6 +5,8 @@ import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopHeader } from "./DesktopHeader";
 import { PullToRefresh } from "./PullToRefresh";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { useNotificationSocket } from "@/hooks/useNotificationSocket";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -16,9 +18,11 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, title, mobileHeader, pullToRefresh }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { isAuthenticated } = useAuth();
+  useNotificationSocket(isAuthenticated);
 
   return (
-    <div className="h-screen flex w-full bg-background">
+    <div className="h-dvh flex w-full bg-background">
       {/* Desktop Sidebar */}
       <DesktopSidebar 
         collapsed={sidebarCollapsed} 
@@ -36,7 +40,7 @@ export function AppLayout({ children, title, mobileHeader, pullToRefresh }: AppL
         {/* Page Content */}
         <main
           className={cn(
-            "flex-1 pb-20 md:pb-6 min-h-0",
+            "flex-1 pb-nav-safe md:pb-6 min-h-0",
             "animate-fade-in",
             pullToRefresh ? "flex flex-col overflow-hidden" : "overflow-y-auto"
           )}

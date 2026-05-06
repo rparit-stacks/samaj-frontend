@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   Calendar,
+  HandCoins,
 } from "lucide-react";
 import {
   Card,
@@ -58,10 +59,13 @@ import { ImageUrlWithUpload } from "@/components/ImageUrlWithUpload";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminSettingsApi,
+  adminDonationApi,
   type SmtpConfigDto,
   type MaintenanceModeDto,
   type StorageConfigDto,
   type CmsMobileBannerDto,
+  type DonationAdminConfigDto,
+  type DonationConfigUpdateDto,
 } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +89,35 @@ export default function AdminSettings() {
   const [showPassword, setShowPassword] = useState(false);
   const [smtpErrors, setSmtpErrors] = useState<Record<string, string>>({});
   const [storageErrors, setStorageErrors] = useState<Record<string, string>>({});
+
+  // Razorpay / Donation config
+  const { data: donationConfig } = useQuery({
+    queryKey: ["admin", "donation", "config"],
+    queryFn: adminDonationApi.getConfig,
+  });
+  const [razorpayForm, setRazorpayForm] = useState<DonationConfigUpdateDto & { showSecret?: boolean }>({});
+  const [dirtyRazorpay, setDirtyRazorpay] = useState(false);
+
+  useEffect(() => {
+    if (donationConfig && !dirtyRazorpay) {
+      setRazorpayForm({
+        keyId: donationConfig.keyId,
+        enabled: donationConfig.enabled,
+        minAmountPaise: donationConfig.minAmountPaise,
+        maxAmountPaise: donationConfig.maxAmountPaise,
+      });
+    }
+  }, [donationConfig]);
+
+  const updateRazorpayMutation = useMutation({
+    mutationFn: (data: DonationConfigUpdateDto) => adminDonationApi.updateConfig(data),
+    onSuccess: () => {
+      toast.success("Payment settings saved");
+      setDirtyRazorpay(false);
+      qc.invalidateQueries({ queryKey: ["admin", "donation", "config"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save"),
+  });
 
   // Dirty state tracking
   const [dirtySmtp, setDirtySmtp] = useState(false);
@@ -281,7 +314,7 @@ export default function AdminSettings() {
         </div>
 
         <Tabs defaultValue="smtp" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="smtp" className="flex items-center gap-2 text-xs sm:text-sm">
               <Mail className="h-4 w-4" />
               <span className="hidden sm:inline">SMTP</span>
@@ -293,6 +326,10 @@ export default function AdminSettings() {
             <TabsTrigger value="storage" className="flex items-center gap-2 text-xs sm:text-sm">
               <HardDrive className="h-4 w-4" />
               <span className="hidden sm:inline">Storage</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="flex items-center gap-2 text-xs sm:text-sm">
+              <HandCoins className="h-4 w-4" />
+              <span className="hidden sm:inline">Payments</span>
             </TabsTrigger>
             <TabsTrigger value="banners" className="flex items-center gap-2 text-xs sm:text-sm">
               <ImageIcon className="h-4 w-4" />
@@ -378,6 +415,35 @@ export default function AdminSettings() {
                           placeholder="your-email@example.com"
                           className="mt-1"
                         />
+                      </div>
+                      <div>
+                        <Label htmlFor="smtp-password">Password</Label>
+                        <div className="relative mt-1">
+                          <Input
+                            id="smtp-password"
+                            type={showPassword ? "text" : "password"}
+                            value={smtpForm.password ?? ""}
+                            onChange={(e) => {
+                              setSmtpForm({
+                                ...smtpForm,
+                                password: e.target.value,
+                              });
+                              setDirtySmtp(true);
+                            }}
+                            placeholder="Leave blank to keep existing"
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((s) => !s)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Leave empty to keep the existing password saved on the server.
+                        </p>
                       </div>
                       <div>
                         <Label htmlFor="smtp-from-email">From Email *</Label>
@@ -732,6 +798,151 @@ export default function AdminSettings() {
                     </div>
                   </>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payments / Razorpay Tab */}
+          <TabsContent value="payments" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Razorpay Configuration</CardTitle>
+                    <CardDescription>
+                      Configure Razorpay keys to enable online donations
+                    </CardDescription>
+                  </div>
+                  {donationConfig?.configured && (
+                    <Badge className="bg-green-100 text-green-800">Configured</Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Enable toggle */}
+                <div className="flex items-center gap-4 pb-2">
+                  <Switch
+                    checked={razorpayForm.enabled ?? false}
+                    onCheckedChange={(checked) => {
+                      setRazorpayForm((f) => ({ ...f, enabled: checked }));
+                      setDirtyRazorpay(true);
+                    }}
+                  />
+                  <div>
+                    <p className="font-medium text-sm">
+                      {razorpayForm.enabled ? "Donations Enabled" : "Donations Disabled"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {razorpayForm.enabled
+                        ? "Users can donate via the Donate page"
+                        : "Donation page will show a disabled state"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="rzp-key-id">Razorpay Key ID</Label>
+                    <Input
+                      id="rzp-key-id"
+                      value={razorpayForm.keyId ?? ""}
+                      onChange={(e) => {
+                        setRazorpayForm((f) => ({ ...f, keyId: e.target.value }));
+                        setDirtyRazorpay(true);
+                      }}
+                      placeholder="rzp_live_..."
+                      className="mt-1 font-mono text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rzp-key-secret">Razorpay Key Secret</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="rzp-key-secret"
+                        type={razorpayForm.showSecret ? "text" : "password"}
+                        onChange={(e) => {
+                          setRazorpayForm((f) => ({ ...f, keySecret: e.target.value }));
+                          setDirtyRazorpay(true);
+                        }}
+                        placeholder="Leave blank to keep existing"
+                        className="pr-10 font-mono text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRazorpayForm((f) => ({ ...f, showSecret: !f.showSecret }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
+                      >
+                        {razorpayForm.showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Leave empty to keep the existing secret saved on the server.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="rzp-min">Minimum Donation (₹)</Label>
+                    <Input
+                      id="rzp-min"
+                      type="number"
+                      min={1}
+                      value={razorpayForm.minAmountPaise != null ? razorpayForm.minAmountPaise / 100 : ""}
+                      onChange={(e) => {
+                        const rupees = parseFloat(e.target.value);
+                        setRazorpayForm((f) => ({ ...f, minAmountPaise: isNaN(rupees) ? 5000 : Math.round(rupees * 100) }));
+                        setDirtyRazorpay(true);
+                      }}
+                      placeholder="50"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Enter amount in ₹ (Rupees)</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="rzp-max">Maximum Donation (₹)</Label>
+                    <Input
+                      id="rzp-max"
+                      type="number"
+                      min={1}
+                      value={razorpayForm.maxAmountPaise != null ? razorpayForm.maxAmountPaise / 100 : ""}
+                      onChange={(e) => {
+                        const rupees = parseFloat(e.target.value);
+                        setRazorpayForm((f) => ({ ...f, maxAmountPaise: isNaN(rupees) ? 10000000 : Math.round(rupees * 100) }));
+                        setDirtyRazorpay(true);
+                      }}
+                      placeholder="100000"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Enter amount in ₹ (Rupees)</p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <Button
+                    onClick={() => {
+                      const { showSecret, ...payload } = razorpayForm;
+                      updateRazorpayMutation.mutate(payload);
+                    }}
+                    disabled={updateRazorpayMutation.isPending || !dirtyRazorpay}
+                    className="gap-2"
+                  >
+                    {updateRazorpayMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save Payment Settings
+                      </>
+                    )}
+                  </Button>
+                  {dirtyRazorpay && !updateRazorpayMutation.isPending && (
+                    <p className="text-sm text-amber-600 mt-2">You have unsaved changes</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

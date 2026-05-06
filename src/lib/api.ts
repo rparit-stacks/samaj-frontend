@@ -1,10 +1,30 @@
 import type { ExamPaperDocument } from "@/types/examPaper";
 
+/**
+ * API base URL.
+ *
+ * - Local/dev: set VITE_API_URL (e.g. http://localhost:8080)
+ * - Vercel/prod: leave VITE_API_URL unset so we use same-origin HTTPS, and proxy to the backend via rewrites.
+ */
 const API_BASE =
   import.meta.env.VITE_API_URL?.trim() ||
-  (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:8080`
-    : "");
+  (typeof window !== "undefined" ? window.location.origin : "");
+
+/**
+ * Only rewrite `/admin/*` → `/admin-api/*` when we're using same-origin hosting + proxy rewrites
+ * (e.g. Vercel `vercel.json`). If `VITE_API_URL` is set, we are calling the backend directly and
+ * MUST keep the real backend paths (`/admin/*`).
+ */
+const SHOULD_USE_ADMIN_PROXY =
+  !import.meta.env.VITE_API_URL?.trim() &&
+  typeof window !== "undefined" &&
+  API_BASE === window.location.origin;
+
+function mapAdminPathForProxy(path: string): string {
+  // Avoid clashing with the frontend /admin routes on Vercel.
+  // We proxy backend admin APIs under /admin-api/* and rewrite that to backend /admin/*.
+  return path.startsWith("/admin/") ? path.replace(/^\/admin\//, "/admin-api/") : path;
+}
 
 /**
  * Public fetch helper: never redirects to /login or /admin/login.
@@ -24,6 +44,17 @@ async function publicFetch<T>(path: string, options: RequestInit = {}): Promise<
     throw new Error((data as any)?.error || (data as any)?.message || "Request failed");
   }
   return data as T;
+}
+
+/**
+ * Admin login is a permitAll endpoint.
+ * IMPORTANT: Do NOT use `adminApi()` here because it redirects on 401 (bad UX for wrong password).
+ */
+export async function adminAuthLogin<T>(body: { identifier: string; password: string }): Promise<T> {
+  return publicFetch<T>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 /** No JWT — used for one-time parent admin install flow. */
@@ -274,7 +305,8 @@ async function refreshAdminToken(): Promise<boolean> {
 }
 
 export async function adminApi<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const finalPath = SHOULD_USE_ADMIN_PROXY ? mapAdminPathForProxy(path) : path;
+  const url = `${API_BASE}${finalPath}`;
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -1908,6 +1940,8 @@ export interface NotificationPreferences {
   emailEnabled: boolean;
   inAppEnabled: boolean;
   securityEmailEnabled: boolean;
+  /** Types the user has individually silenced, e.g. ["COMMUNITY", "EVENT"]. */
+  disabledTypes?: string[];
 }
 
 export interface Paginated<T> {
@@ -2738,6 +2772,11 @@ export interface SmtpConfigDto {
   host: string;
   port: number;
   username: string;
+  /**
+   * Optional. Leave blank to keep the existing stored password on the server.
+   * Server never returns the current password.
+   */
+  password?: string;
   fromEmail: string;
   fromName: string;
   configured: boolean;
@@ -3129,4 +3168,423 @@ export const samajHistoryApi = {
     return api<HistoryPageResponse>(`/api/v1/history${s ? `?${s}` : ""}`);
   },
   get: (id: number) => api<HistoryDto>(`/api/v1/history/${encodeURIComponent(String(id))}`),
+};
+
+// Device Token API — registers/unregisters FCM tokens so the backend can send targeted push notifications
+export const deviceTokenApi = {
+  register: (token: string, platform = "ANDROID") =>
+    api<void>("/api/v1/device-tokens", {
+      method: "POST",
+      body: JSON.stringify({ token, platform }),
+    }),
+  unregister: (token: string) =>
+    api<void>("/api/v1/device-tokens", {
+      method: "DELETE",
+      body: JSON.stringify({ token }),
+    }),
+};
+
+// ==================== DONATIONS ====================
+
+export interface DonationPublicConfigDto {
+  enabled: boolean;
+  minAmountPaise: number;
+  maxAmountPaise: number;
+  keyId: string;
+}
+
+export interface DonationAdminConfigDto {
+  enabled: boolean;
+  minAmountPaise: number;
+  maxAmountPaise: number;
+  keyId: string;
+  configured: boolean;
+}
+
+export interface DonationConfigUpdateDto {
+  keyId?: string;
+  keySecret?: string;
+  enabled?: boolean;
+  minAmountPaise?: number;
+  maxAmountPaise?: number;
+}
+
+export interface CreateOrderResponseDto {
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  keyId: string;
+}
+
+export interface DonationItemDto {
+  id: number;
+  userId: string | null;
+  userName: string | null;
+  amountPaise: number;
+  currency: string;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  razorpayOrderId: string | null;
+  razorpayPaymentId: string | null;
+  notes: string | null;
+  createdAt: string | null;
+}
+
+export interface DonationPageDto {
+  content: DonationItemDto[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface DonationStatsDto {
+  totalSuccessAmountPaise: number;
+  thisMonthSuccessAmountPaise: number;
+  totalDonors: number;
+  successCount: number;
+  failedCount: number;
+  pendingCount: number;
+}
+
+export const donationApi = {
+  config: () => api<DonationPublicConfigDto>("/api/v1/donations/config"),
+
+  createOrder: (amountPaise: number, notes?: string) =>
+    api<CreateOrderResponseDto>("/api/v1/donations/order", {
+      method: "POST",
+      body: JSON.stringify({ amountPaise, notes }),
+    }),
+
+  verifyPayment: (body: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+    notes?: string;
+  }) =>
+    api<DonationItemDto>("/api/v1/donations/verify", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  myDonations: (params?: { page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page != null) qs.set("page", String(params.page));
+    if (params?.size != null) qs.set("size", String(params.size));
+    const s = qs.toString();
+    return api<DonationPageDto>(`/api/v1/donations/my${s ? `?${s}` : ""}`);
+  },
+};
+
+export const adminDonationApi = {
+  list: (params?: { page?: number; size?: number; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page != null) qs.set("page", String(params.page));
+    if (params?.size != null) qs.set("size", String(params.size));
+    if (params?.status) qs.set("status", params.status);
+    const s = qs.toString();
+    return adminApi<DonationPageDto>(`/admin/donations${s ? `?${s}` : ""}`);
+  },
+
+  stats: () => adminApi<DonationStatsDto>("/admin/donations/stats"),
+
+  getConfig: () => adminApi<DonationAdminConfigDto>("/admin/donations/config"),
+
+  updateConfig: (body: DonationConfigUpdateDto) =>
+    adminApi<DonationAdminConfigDto>("/admin/donations/config", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+};
+
+// ---- Business Listings ----
+
+export interface BusinessSummaryDto {
+  id: string;
+  name: string;
+  category: string | null;
+  city: string | null;
+  phone: string | null;
+  firstPhoto: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "BANNED";
+  ownerId: string;
+  ownerName: string;
+  ownerAvatar: string | null;
+  featured: boolean;
+  viewCount: number;
+  createdAt: string;
+}
+
+export interface BusinessDetailDto {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  website: string | null;
+  photos: string[];
+  status: "PENDING" | "APPROVED" | "REJECTED" | "BANNED";
+  rejectionReason: string | null;
+  ownerId: string;
+  ownerName: string;
+  ownerAvatar: string | null;
+  ownerProfileKey: string | null;
+  featured: boolean;
+  viewCount: number;
+  isOwner: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessPageDto {
+  content: BusinessSummaryDto[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface BusinessAdminSummaryDto {
+  id: string;
+  name: string;
+  category: string | null;
+  city: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "BANNED";
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string | null;
+  featured: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessAdminPageDto {
+  content: BusinessAdminSummaryDto[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export interface BusinessFormData {
+  name: string;
+  description?: string;
+  category?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  website?: string;
+  photos?: string[];
+}
+
+export const businessApi = {
+  list: (params?: { category?: string; page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.set("category", params.category);
+    if (params?.page !== undefined) qs.set("page", String(params.page));
+    if (params?.size !== undefined) qs.set("size", String(params.size));
+    const q = qs.toString();
+    return api<BusinessPageDto>(`/api/v1/business${q ? "?" + q : ""}`);
+  },
+  get: (id: string) => api<BusinessDetailDto>(`/api/v1/business/${id}`),
+  listMine: (params?: { page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page !== undefined) qs.set("page", String(params.page));
+    if (params?.size !== undefined) qs.set("size", String(params.size));
+    const q = qs.toString();
+    return api<BusinessPageDto>(`/api/v1/business/my${q ? "?" + q : ""}`);
+  },
+  getMine: (id: string) => api<BusinessDetailDto>(`/api/v1/business/my/${id}`),
+  create: (data: BusinessFormData) =>
+    api<BusinessDetailDto>("/api/v1/business", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: BusinessFormData) =>
+    api<BusinessDetailDto>(`/api/v1/business/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: string) => api<void>(`/api/v1/business/${id}`, { method: "DELETE" }),
+};
+
+export const adminBusinessApi = {
+  list: (params?: { status?: string; page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status && params.status !== "ALL") qs.set("status", params.status);
+    if (params?.page !== undefined) qs.set("page", String(params.page));
+    if (params?.size !== undefined) qs.set("size", String(params.size));
+    const q = qs.toString();
+    return adminApi<BusinessAdminPageDto>(`/admin/business${q ? "?" + q : ""}`);
+  },
+  get: (id: string) => adminApi<BusinessDetailDto>(`/admin/business/${id}`),
+  approve: (id: string, featured?: boolean) =>
+    adminApi<BusinessDetailDto>(`/admin/business/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ featured: featured ?? false }),
+    }),
+  reject: (id: string, reason: string) =>
+    adminApi<BusinessDetailDto>(`/admin/business/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  ban: (id: string) =>
+    adminApi<BusinessDetailDto>(`/admin/business/${id}/ban`, { method: "POST" }),
+  toggleFeatured: (id: string) =>
+    adminApi<BusinessDetailDto>(`/admin/business/${id}/toggle-featured`, { method: "POST" }),
+  delete: (id: string) => adminApi<void>(`/admin/business/${id}`, { method: "DELETE" }),
+};
+
+// ---- Job Listings ----
+
+export interface JobSummaryDto {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  jobType: string | null;
+  category: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  featured: boolean;
+  postedByAdmin: boolean;
+  deadline: string | null;
+  viewCount: number;
+  createdAt: string;
+}
+
+export interface JobDetailDto {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  jobType: string | null;
+  category: string | null;
+  description: string;
+  requirements: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  applyUrl: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  rejectionReason: string | null;
+  featured: boolean;
+  postedByAdmin: boolean;
+  submittedById: string | null;
+  submittedByName: string | null;
+  deadline: string | null;
+  viewCount: number;
+  isOwner: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JobPageDto {
+  content: JobSummaryDto[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface JobAdminSummaryDto {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  jobType: string | null;
+  category: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  postedByAdmin: boolean;
+  featured: boolean;
+  submittedById: string | null;
+  submittedByName: string | null;
+  submittedByEmail: string | null;
+  deadline: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JobAdminPageDto {
+  content: JobAdminSummaryDto[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export interface JobFormData {
+  title: string;
+  company: string;
+  description: string;
+  location?: string;
+  jobType?: string;
+  category?: string;
+  requirements?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  applyUrl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  deadline?: string;
+}
+
+export const jobApi = {
+  list: (params?: { category?: string; jobType?: string; page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.set("category", params.category);
+    if (params?.jobType) qs.set("jobType", params.jobType);
+    if (params?.page !== undefined) qs.set("page", String(params.page));
+    if (params?.size !== undefined) qs.set("size", String(params.size));
+    const q = qs.toString();
+    return api<JobPageDto>(`/api/v1/jobs${q ? "?" + q : ""}`);
+  },
+  get: (id: string) => api<JobDetailDto>(`/api/v1/jobs/${id}`),
+  listMine: (params?: { page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page !== undefined) qs.set("page", String(params.page));
+    if (params?.size !== undefined) qs.set("size", String(params.size));
+    const q = qs.toString();
+    return api<JobPageDto>(`/api/v1/jobs/my${q ? "?" + q : ""}`);
+  },
+  getMine: (id: string) => api<JobDetailDto>(`/api/v1/jobs/my/${id}`),
+  submit: (data: JobFormData) =>
+    api<JobDetailDto>("/api/v1/jobs", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: JobFormData) =>
+    api<JobDetailDto>(`/api/v1/jobs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: string) => api<void>(`/api/v1/jobs/${id}`, { method: "DELETE" }),
+};
+
+export const adminJobApi = {
+  list: (params?: { status?: string; page?: number; size?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status && params.status !== "ALL") qs.set("status", params.status);
+    if (params?.page !== undefined) qs.set("page", String(params.page));
+    if (params?.size !== undefined) qs.set("size", String(params.size));
+    const q = qs.toString();
+    return adminApi<JobAdminPageDto>(`/admin/jobs${q ? "?" + q : ""}`);
+  },
+  get: (id: string) => adminApi<JobDetailDto>(`/admin/jobs/${id}`),
+  create: (data: JobFormData) =>
+    adminApi<JobDetailDto>("/admin/jobs", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: JobFormData) =>
+    adminApi<JobDetailDto>(`/admin/jobs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  approve: (id: string, featured?: boolean) =>
+    adminApi<JobDetailDto>(`/admin/jobs/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ featured: featured ?? false }),
+    }),
+  reject: (id: string, reason: string) =>
+    adminApi<JobDetailDto>(`/admin/jobs/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  toggleFeatured: (id: string) =>
+    adminApi<JobDetailDto>(`/admin/jobs/${id}/toggle-featured`, { method: "POST" }),
+  delete: (id: string) => adminApi<void>(`/admin/jobs/${id}`, { method: "DELETE" }),
 };

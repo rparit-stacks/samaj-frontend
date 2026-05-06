@@ -1,66 +1,93 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Eye, EyeOff, Mail, Lock, User, Phone } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, ShieldCheck, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import { cn } from "@/lib/utils";
+
+const signupSchema = z
+  .object({
+    name: z.string().trim().min(2, "Name must be at least 2 characters"),
+    email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+    phone: z
+      .string()
+      .trim()
+      .optional()
+      .refine(
+        (v) => !v || /^[+\d][\d\s-]{6,}$/.test(v),
+        "Enter a valid phone number"
+      ),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(72, "Password is too long"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+  });
+
+type SignupValues = z.infer<typeof signupSchema>;
 
 export default function UserSignup() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, completeSession } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      navigate("/", { replace: true });
-    }
+    if (!authLoading && isAuthenticated) navigate("/", { replace: true });
   }, [isAuthenticated, authLoading, navigate]);
-  const [step, setStep] = useState(1);
+
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [otpPhase, setOtpPhase] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    name: "",
-    phone: "",
+
+  const emailRef = useRef<HTMLInputElement | null>(null);
+  const phoneRef = useRef<HTMLInputElement | null>(null);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
+  const confirmRef = useRef<HTMLInputElement | null>(null);
+
+  const form = useForm<SignupValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: useMemo(
+      () => ({ name: "", email: "", phone: "", password: "", confirmPassword: "" }),
+      []
+    ),
+    mode: "onSubmit",
   });
 
-  const handleNext = () => {
-    if (step === 1) {
-      if (!formData.email.trim()) {
-        toast.error("Email is required");
-        return;
-      }
-      if (formData.password.length < 8) {
-        toast.error("Password must be at least 8 characters");
-        return;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        toast.error("Passwords do not match");
-        return;
-      }
-    }
-    setStep(2);
-  };
-
-  const handleBack = () => setStep(1);
-
-  const handleSubmit = async () => {
+  const sendOtp = async () => {
+    const values = form.getValues();
     setIsLoading(true);
     try {
       await authApi.register({
-        email: formData.email.trim(),
-        phone: formData.phone?.trim() || undefined,
-        password: formData.password,
+        email: values.email.trim(),
+        phone: values.phone?.trim() || undefined,
+        password: values.password,
       });
-      toast.success("OTP sent. In development, check the backend terminal for the code.");
+      toast.success("Verification code sent. Check your email.");
       setOtpPhase(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
@@ -69,37 +96,18 @@ export default function UserSignup() {
     }
   };
 
-  const handleResendOtp = async () => {
-    setIsLoading(true);
-    try {
-      await authApi.sendOtp({
-        identifier: formData.email.trim(),
-        type: "EMAIL",
-        purpose: "REGISTRATION",
-      });
-      toast.success("OTP resent. In development, check the backend terminal.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not resend OTP");
-    } finally {
-      setIsLoading(false);
+  const handleSubmit = async (values: SignupValues) => {
+    if (!otpPhase) {
+      await sendOtp();
+      return;
     }
-  };
-
-  const handleVerifyOtp = async () => {
+    // OTP phase: verify + finalize
     const code = otp.trim().replace(/\s/g, "");
-    if (!code) {
-      toast.error("Please enter the OTP");
-      return;
-    }
     if (!/^\d{6}$/.test(code)) {
-      toast.error("Enter the 6-digit code");
+      toast.error("Enter the 6-digit verification code");
       return;
     }
-    const email = formData.email.trim().toLowerCase();
-    if (!email) {
-      toast.error("Email missing — go back and start again");
-      return;
-    }
+    const email = values.email.trim().toLowerCase();
     setOtpLoading(true);
     try {
       const auth = await authApi.verifyOtp({
@@ -107,22 +115,20 @@ export default function UserSignup() {
         code,
         purpose: "REGISTRATION",
       });
-
-      // Must update AuthContext — only localStorage breaks ProtectedRoute (isAuthenticated stays false)
       completeSession(auth);
 
-      if (formData.name.trim() || formData.phone?.trim()) {
+      if (values.name.trim() || values.phone?.trim()) {
         try {
           await authApi.updateProfile({
-            name: formData.name.trim() || undefined,
-            phone: formData.phone?.trim() || undefined,
+            name: values.name.trim() || undefined,
+            phone: values.phone?.trim() || undefined,
           });
         } catch {
-          /* ignore */
+          // ignore profile update error — account still created
         }
       }
 
-      toast.success("Account created and verified! Welcome!");
+      toast.success("Account created. Welcome!");
       navigate("/", { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "OTP verification failed");
@@ -131,231 +137,400 @@ export default function UserSignup() {
     }
   };
 
+  const handleResendOtp = async () => {
+    const email = form.getValues("email").trim();
+    if (!email) {
+      toast.error("Email is required");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await authApi.sendOtp({
+        identifier: email,
+        type: "EMAIL",
+        purpose: "REGISTRATION",
+      });
+      toast.success("Verification code resent");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resend code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-10 w-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-dvh flex items-center justify-center bg-background">
+        <div className="h-10 w-10 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
+  const busy = isLoading || otpLoading;
+
   return (
-    <div className="h-[100dvh] overflow-hidden bg-gradient-hero">
-      <div className="h-[100dvh] md:grid md:grid-cols-2">
-        {/* Hero / Image area */}
-        <div className="relative h-[40dvh] md:h-auto md:min-h-[100dvh]">
-          {/* Mobile hero */}
-          <div className="md:hidden h-[40dvh] w-full bg-gradient-primary relative overflow-hidden">
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-white/20 blur-2xl" />
-              <div className="absolute -bottom-24 -right-24 h-80 w-80 rounded-full bg-white/10 blur-2xl" />
-            </div>
-            <div className="relative h-full px-6 pt-10 pb-14 flex flex-col justify-end">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/15 ring-1 ring-white/25 shadow-glow">
-                <span className="text-white font-bold text-2xl">स</span>
-              </div>
-              <h1 className="mt-4 text-3xl font-bold text-white tracking-tight">Create your account</h1>
-            </div>
-          </div>
-
-          {/* Desktop hero */}
-          <div className="hidden md:flex h-full items-center justify-center p-10 bg-gradient-primary relative overflow-hidden">
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-white/20 blur-3xl" />
-              <div className="absolute -bottom-24 -right-24 h-[28rem] w-[28rem] rounded-full bg-white/10 blur-3xl" />
-            </div>
-            <div className="relative max-w-md">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white/15 ring-1 ring-white/25 shadow-glow">
-                <span className="text-white font-bold text-3xl">स</span>
-              </div>
-              <h1 className="mt-6 text-4xl font-bold text-white tracking-tight">Samaj</h1>
-              <p className="mt-3 text-white/85 text-base leading-relaxed">
-                Join your community. Verify your email with OTP and get started.
-              </p>
-              <div className="mt-8 grid grid-cols-2 gap-3 text-white/85 text-sm">
-                <div className="rounded-2xl bg-white/10 ring-1 ring-white/15 p-4">
-                  <div className="font-semibold text-white">Simple</div>
-                  <div className="mt-1 text-white/75">Quick signup flow</div>
-                </div>
-                <div className="rounded-2xl bg-white/10 ring-1 ring-white/15 p-4">
-                  <div className="font-semibold text-white">Verified</div>
-                  <div className="mt-1 text-white/75">OTP based access</div>
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-dvh flex flex-col bg-muted/40">
+      {/* ── Top bar ── */}
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border/60 pt-safe-top">
+        <div className="mx-auto w-full max-w-md flex items-center gap-2 px-4 h-14">
+          <button
+            type="button"
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/login"))}
+            className="tap-target inline-flex items-center justify-center -ml-2 rounded-xl text-primary hover:bg-primary/10 transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <span className="text-sm font-bold tracking-[0.18em] text-primary uppercase">
+            Samaj
+          </span>
         </div>
+      </header>
 
-        {/* Form area */}
-        <div className="relative h-[60dvh] md:min-h-[100dvh] md:h-auto flex items-stretch md:items-center justify-center px-0 md:px-4 pb-0 md:py-10">
-          {/* Background behind the card (mobile) - same as hero */}
-          <div className="md:hidden absolute inset-0 bg-gradient-primary" aria-hidden="true" />
-          <div className="md:hidden absolute inset-0 opacity-20" aria-hidden="true">
-            <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-white/20 blur-2xl" />
-            <div className="absolute -bottom-24 -right-24 h-80 w-80 rounded-full bg-white/10 blur-2xl" />
-          </div>
+      {/* ── Main ── */}
+      <main className="flex-1 w-full">
+        <div className="mx-auto w-full max-w-md px-4 sm:px-5 py-5 space-y-4">
+          {/* Form card */}
+          <div className="rounded-2xl bg-background border border-border/60 shadow-[var(--shadow-md)] p-5 sm:p-6">
+            <div>
+              <h1 className="text-[28px] leading-tight font-bold tracking-tight text-foreground">
+                Create Account
+              </h1>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Join the Samaj community for news, events &amp; more.
+              </p>
+            </div>
 
-          {/* Mobile bottom-sheet (edge-to-edge, only top corners rounded) */}
-          <div className="relative w-full flex-1 min-h-0 flex items-stretch md:block md:max-w-md md:mt-0 md:px-0">
-            <Card className="border-border/60 shadow-xl bg-gradient-card overflow-hidden w-full rounded-t-3xl rounded-b-none md:rounded-2xl md:border md:shadow-xl">
-              <CardContent className="pt-6 pb-6 px-5 md:px-6 h-full flex flex-col min-h-0 overflow-auto scrollbar-hide">
-                {/* Mobile header */}
-                <div className="md:hidden mb-5">
-                  <h2 className="text-xl font-bold leading-tight">
-                    {otpPhase ? "Verify OTP" : step === 1 ? "Sign up" : "Personal info"}
-                  </h2>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    {otpPhase ? "Enter the 6-digit code sent to your email" : "Create a new account"}
-                  </p>
-                </div>
-                {/* Desktop header */}
-                <div className="hidden md:block mb-6">
-                  <h2 className="text-2xl font-bold">Sign Up</h2>
-                  <p className="text-muted-foreground text-sm mt-1">Create a new account</p>
-                </div>
-
-                {otpPhase ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      We&apos;ve sent a 6-digit verification code to{" "}
-                      <span className="font-medium">{formData.email}</span>. Enter it below to complete your signup.
-                    </p>
-                    <div className="space-y-2">
-                      <Label>OTP Code</Label>
-                      <Input
-                        placeholder="Enter 6-digit OTP"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                        inputMode="numeric"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        type="button"
-                        onClick={handleResendOtp}
-                        disabled={isLoading}
-                      >
-                        Resend OTP
-                      </Button>
-                      <Button className="flex-1" onClick={handleVerifyOtp} disabled={otpLoading}>
-                        {otpLoading ? "Verifying..." : "Verify & Continue"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : step === 1 ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Email</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="mt-6 space-y-4"
+                noValidate
+              >
+                {/* Full name */}
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
+                        Full Name
+                      </FormLabel>
+                      <FormControl>
                         <Input
+                          {...field}
+                          autoComplete="name"
+                          placeholder="Your name"
+                          className="h-11 text-base bg-background focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
+                          enterKeyHint="next"
+                          disabled={otpPhase}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              emailRef.current?.focus();
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Email */}
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
+                        Email Address
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          ref={(el) => {
+                            emailRef.current = el;
+                            field.ref(el);
+                          }}
                           type="email"
                           inputMode="email"
                           autoComplete="email"
                           placeholder="you@example.com"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          className="pl-10"
-                          required
+                          className="h-11 text-base bg-background focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
+                          enterKeyHint="next"
+                          disabled={otpPhase}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              phoneRef.current?.focus();
+                            }
+                          }}
                         />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Password (min 8 chars)</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Phone */}
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
+                        Phone Number
+                      </FormLabel>
+                      <FormControl>
                         <Input
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="new-password"
-                          placeholder="••••••••"
-                          value={formData.password}
-                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          className="pl-10 pr-10"
-                          minLength={8}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground tap-target inline-flex items-center justify-center"
-                          aria-label={showPassword ? "Hide password" : "Show password"}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Confirm Password</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="••••••••"
-                          value={formData.confirmPassword}
-                          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <Button onClick={handleNext} className="w-full">
-                      Next
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Name</Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Your name"
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Phone</Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
+                          {...field}
+                          ref={(el) => {
+                            phoneRef.current = el;
+                            field.ref(el);
+                          }}
                           type="tel"
+                          inputMode="tel"
                           autoComplete="tel"
                           placeholder="+91 98765 43210"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          className="pl-10"
+                          className="h-11 text-base bg-background focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
+                          enterKeyHint="next"
+                          disabled={otpPhase}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              passwordRef.current?.focus();
+                            }
+                          }}
                         />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={handleBack} className="flex-1">
-                        Back
-                      </Button>
-                      <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
-                        {isLoading ? "Sending OTP..." : "Send OTP"}
-                      </Button>
-                    </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Password + Confirm */}
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
+                          Password
+                        </FormLabel>
+                        <div className="relative">
+                          <FormControl>
+                            <Input
+                              {...field}
+                              ref={(el) => {
+                                passwordRef.current = el;
+                                field.ref(el);
+                              }}
+                              type={showPassword ? "text" : "password"}
+                              autoComplete="new-password"
+                              placeholder="••••••••"
+                              className="h-11 text-base bg-background pr-10 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
+                              enterKeyHint="next"
+                              disabled={otpPhase}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  confirmRef.current?.focus();
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground tap-target inline-flex items-center justify-center rounded-lg"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                            tabIndex={-1}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
+                          Confirm
+                        </FormLabel>
+                        <div className="relative">
+                          <FormControl>
+                            <Input
+                              {...field}
+                              ref={(el) => {
+                                confirmRef.current = el;
+                                field.ref(el);
+                              }}
+                              type={showConfirm ? "text" : "password"}
+                              autoComplete="new-password"
+                              placeholder="••••••••"
+                              className="h-11 text-base bg-background pr-10 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
+                              enterKeyHint="done"
+                              disabled={otpPhase}
+                            />
+                          </FormControl>
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirm((v) => !v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground tap-target inline-flex items-center justify-center rounded-lg"
+                            aria-label={showConfirm ? "Hide password" : "Show password"}
+                            tabIndex={-1}
+                          >
+                            {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Identity Verification */}
+                <div
+                  className={cn(
+                    "mt-2 rounded-xl border p-4 transition-all",
+                    otpPhase
+                      ? "border-primary/20 bg-primary/[0.04]"
+                      : "border-border/60 bg-muted/40 opacity-80"
+                  )}
+                  aria-live="polite"
+                >
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                    <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/90">
+                      Identity Verification
+                    </span>
                   </div>
-                )}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {otpPhase
+                      ? `Enter the 6-digit code sent to ${form.getValues("email") || "your email"}.`
+                      : "A 6-digit code will be sent to your email after you tap Sign Up."}
+                  </p>
 
-                <p className="text-center text-sm text-muted-foreground mt-5">
-                  Already have an account?{" "}
-                  <Link to="/login" className="text-primary font-medium hover:underline">
-                    Login
-                  </Link>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <InputOTP
+                      maxLength={6}
+                      value={otp}
+                      onChange={(v) => setOtp(v)}
+                      disabled={!otpPhase}
+                      containerClassName="gap-1.5"
+                    >
+                      <InputOTPGroup className="gap-1.5">
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <InputOTPSlot
+                            key={i}
+                            index={i}
+                            className={cn(
+                              "h-10 w-9 sm:w-10 rounded-md border border-input bg-background text-sm font-semibold",
+                              "first:rounded-md last:rounded-md"
+                            )}
+                          />
+                        ))}
+                      </InputOTPGroup>
+                    </InputOTP>
+
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={!otpPhase || busy}
+                      className="text-[11px] font-bold tracking-[0.1em] uppercase text-primary disabled:text-muted-foreground disabled:cursor-not-allowed hover:underline shrink-0"
+                    >
+                      Resend OTP
+                    </button>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-sm font-bold tracking-[0.14em] uppercase"
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <span className="flex items-center gap-2">
+                      <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      {otpPhase ? "Verifying…" : "Sending code…"}
+                    </span>
+                  ) : otpPhase ? (
+                    "Verify & Create"
+                  ) : (
+                    "Sign Up"
+                  )}
+                </Button>
+              </form>
+            </Form>
+
+            <p className="text-center text-sm text-muted-foreground mt-5">
+              Already have an account?{" "}
+              <Link
+                to="/login"
+                className="text-primary font-bold tracking-[0.08em] uppercase hover:underline"
+              >
+                Log In
+              </Link>
+            </p>
+          </div>
+
+          {/* Promo strip */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-primary text-white p-5 shadow-[var(--shadow-md)]">
+            <div className="absolute inset-0 opacity-25" aria-hidden="true">
+              <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-white/25 blur-2xl" />
+              <div className="absolute -bottom-10 -left-10 h-36 w-36 rounded-full bg-black/20 blur-2xl" />
+            </div>
+            <div className="relative flex items-start gap-3">
+              <div className="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-white/15 ring-1 ring-white/25 shrink-0">
+                <Lock className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold leading-tight">
+                  End-to-end encryption for your data.
+                </h3>
+                <p className="mt-1 text-xs text-white/80 leading-relaxed">
+                  Your personal information is secured and never shared without consent.
                 </p>
-              </CardContent>
-            </Card>
-
-            <div className="md:hidden h-safe-bottom" />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
+
+      {/* ── Footer ── */}
+      <footer className="border-t border-border/60 bg-background pb-safe-bottom">
+        <div className="mx-auto w-full max-w-md px-5 py-5">
+          <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground">
+            <span className="text-primary font-bold tracking-[0.18em]">Samaj</span>{" "}
+            &nbsp;© {new Date().getFullYear()} Suryavanshi Samaj. All rights reserved.
+          </p>
+          <div className="mt-3 flex items-start gap-6 text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground">
+            <Link to="/privacy" className="hover:text-primary leading-tight">
+              Privacy
+              <br />
+              Policy
+            </Link>
+            <Link to="/terms" className="hover:text-primary leading-tight">
+              Terms of
+              <br />
+              Service
+            </Link>
+            <Link to="/help" className="hover:text-primary leading-tight">
+              Help
+              <br />
+              Center
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

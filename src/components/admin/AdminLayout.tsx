@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, Calendar, AlertTriangle,
   MessageSquare, Image, Heart, GraduationCap, Settings, Bell,
-  LogOut, Search, Menu, X, ChevronDown, Shield, History, Trophy, BookOpen
+  LogOut, Search, Menu, X, ChevronDown, Shield, History, Trophy, BookOpen, HandCoins, Briefcase, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,9 @@ const sidebarItemsAll = [
   { to: "/admin/exams", icon: GraduationCap, label: "Exams & Scholarships" },
   { to: "/admin/achievements", icon: Trophy, label: "Achievers" },
   { to: "/admin/history", icon: BookOpen, label: "Samaj History" },
+  { to: "/admin/donations", icon: HandCoins, label: "Donations" },
+  { to: "/admin/business", icon: Briefcase, label: "Business" },
+  { to: "/admin/jobs", icon: ClipboardList, label: "Job listings" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
   { to: "/admin/audit-logs", icon: History, label: "Audit Logs" },
 ];
@@ -53,7 +56,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const { data: me } = useQuery({
+  const { data: me, isPending: meLoading } = useQuery({
     queryKey: ["admin", "system", "me"],
     queryFn: adminSystemApi.me,
   });
@@ -82,6 +85,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       if (i.to === "/admin/exams") return keys.has("EXAM");
       if (i.to === "/admin/achievements") return keys.has("ACHIEVER");
       if (i.to === "/admin/history") return keys.has("HISTORY");
+      if (i.to === "/admin/donations") return keys.has("DONATION") || me?.parentAdmin === true;
+      if (i.to === "/admin/business") return keys.has("BUSINESS");
+      if (i.to === "/admin/jobs") return keys.has("JOBS");
       // User management is parent-only until backend endpoints exist.
       if (i.to === "/admin/users") return false;
       return false;
@@ -96,6 +102,15 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      {meLoading && (
+        <div className="fixed inset-0 z-[100] bg-white/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto h-10 w-10 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />
+            <p className="mt-4 text-slate-700 text-sm font-medium">Loading admin data…</p>
+            <p className="mt-1 text-slate-500 text-xs">Please wait</p>
+          </div>
+        </div>
+      )}
       {/* Sidebar */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 transition-all duration-300",

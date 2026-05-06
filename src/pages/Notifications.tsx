@@ -2,19 +2,34 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Bell, Newspaper, AlertTriangle, CheckCircle, Clock, Trash2
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Bell, Newspaper, AlertTriangle, CheckCircle, Clock, Trash2, Briefcase,
+  Settings2, Users, Calendar, Image, FileText, Megaphone, Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { notificationApi, type NotificationDto } from "@/lib/api";
+import { notificationApi, type NotificationDto, type NotificationPreferences } from "@/lib/api";
 
 const typeConfig = {
   info: { icon: Newspaper, color: "bg-blue-500/10 text-blue-600" },
+  jobs: { icon: Briefcase, color: "bg-violet-500/10 text-violet-700" },
   emergency: { icon: AlertTriangle, color: "bg-destructive/10 text-destructive" },
   system: { icon: CheckCircle, color: "bg-emerald-500/10 text-emerald-700" },
 } as const;
+
+const NOTIFICATION_TYPES = [
+  { key: "COMMUNITY", label: "Community Posts", desc: "New posts from community members", icon: Users },
+  { key: "EVENT",     label: "Events",          desc: "New events created by members",    icon: Calendar },
+  { key: "NEWS",      label: "News & Articles",  desc: "Published news articles",          icon: Newspaper },
+  { key: "ALERT",     label: "Emergency Alerts", desc: "High-priority emergency alerts",   icon: AlertTriangle },
+  { key: "INFO",      label: "Gallery & Docs",   desc: "New gallery albums and documents", icon: Image },
+  { key: "SYSTEM",    label: "System Messages",  desc: "Admin announcements",              icon: Megaphone },
+  { key: "JOB",       label: "Jobs",             desc: "New job postings",                 icon: Briefcase },
+  { key: "ACHIEVEMENT", label: "Achievements",   desc: "Community milestone updates",      icon: Trophy },
+] as const;
 
 function formatNotificationTime(createdAt: string): string {
   try {
@@ -67,11 +82,43 @@ export default function Notifications() {
     },
   });
 
+  const { data: prefs } = useQuery({
+    queryKey: ["notifications", "preferences"],
+    queryFn: notificationApi.getPreferences,
+  });
+
+  const prefsMutation = useMutation({
+    mutationFn: (body: NotificationPreferences) => notificationApi.updatePreferences(body),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["notifications", "preferences"], updated);
+    },
+  });
+
+  function toggleGlobal(field: "emailEnabled" | "inAppEnabled") {
+    if (!prefs) return;
+    prefsMutation.mutate({ ...prefs, [field]: !prefs[field] });
+  }
+
+  function toggleType(typeKey: string) {
+    if (!prefs) return;
+    const current = new Set(prefs.disabledTypes ?? []);
+    if (current.has(typeKey)) {
+      current.delete(typeKey);
+    } else {
+      current.add(typeKey);
+    }
+    prefsMutation.mutate({ ...prefs, disabledTypes: Array.from(current) });
+  }
+
   const filterNotifications = (tab: "all" | "info" | "emergency" | "system") => {
     if (tab === "all") return notifications;
     if (tab === "emergency") return notifications.filter((n) => n.type === "SECURITY" || n.type === "ALERT");
     if (tab === "system") return notifications.filter((n) => n.type === "SYSTEM");
-    return notifications.filter((n) => n.type === "INFO");
+    return notifications.filter((n) => {
+      const t = n.type || "";
+      if (t === "INFO") return true;
+      return t.startsWith("JOB");
+    });
   };
 
   return (
@@ -121,6 +168,10 @@ export default function Notifications() {
             <TabsTrigger value="info">Info</TabsTrigger>
             <TabsTrigger value="emergency">Emergency</TabsTrigger>
             <TabsTrigger value="system">System</TabsTrigger>
+            <TabsTrigger value="preferences" className="gap-1">
+              <Settings2 className="h-3.5 w-3.5" />
+              Preferences
+            </TabsTrigger>
           </TabsList>
 
           {(["all", "info", "emergency", "system"] as const).map((tabValue) => (
@@ -133,12 +184,15 @@ export default function Notifications() {
                   </div>
                 ) : (
                   filterNotifications(tabValue).map((notification: NotificationDto) => {
+                    const t = notification.type || "";
                     const configKey =
-                      notification.type === "SECURITY" || notification.type === "ALERT"
+                      t === "SECURITY" || t === "ALERT"
                         ? "emergency"
-                        : notification.type === "SYSTEM"
+                        : t === "SYSTEM"
                           ? "system"
-                          : "info";
+                          : t.startsWith("JOB")
+                            ? "jobs"
+                            : "info";
                     const config = typeConfig[configKey];
                     const Icon = config.icon;
 
@@ -193,6 +247,84 @@ export default function Notifications() {
               </div>
             </TabsContent>
           ))}
+          {/* Preferences panel */}
+          <TabsContent value="preferences" className="mt-6 space-y-6">
+            {/* Global toggles */}
+            <div className="bg-card rounded-2xl shadow-card p-5 space-y-4">
+              <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Global Settings
+              </h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="toggle-inapp" className="font-medium">In-App Notifications</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Show notifications inside the web app
+                  </p>
+                </div>
+                <Switch
+                  id="toggle-inapp"
+                  checked={prefs?.inAppEnabled ?? true}
+                  onCheckedChange={() => toggleGlobal("inAppEnabled")}
+                  disabled={prefsMutation.isPending}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="toggle-email" className="font-medium">Email Notifications</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Receive email digests and alerts
+                  </p>
+                </div>
+                <Switch
+                  id="toggle-email"
+                  checked={prefs?.emailEnabled ?? true}
+                  onCheckedChange={() => toggleGlobal("emailEnabled")}
+                  disabled={prefsMutation.isPending}
+                />
+              </div>
+            </div>
+
+            {/* Per-type toggles */}
+            <div className="bg-card rounded-2xl shadow-card p-5 space-y-4">
+              <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Notification Types
+              </h2>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Turn off types you don't want to receive.
+              </p>
+              <div className="divide-y divide-border">
+                {NOTIFICATION_TYPES.map(({ key, label, desc, icon: Icon }) => {
+                  const disabled = prefs?.disabledTypes?.includes(key) ?? false;
+                  return (
+                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                          key === "ALERT"
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-muted text-muted-foreground"
+                        )}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <Label htmlFor={`toggle-${key}`} className="font-medium cursor-pointer">
+                            {label}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">{desc}</p>
+                        </div>
+                      </div>
+                      <Switch
+                        id={`toggle-${key}`}
+                        checked={!disabled}
+                        onCheckedChange={() => toggleType(key)}
+                        disabled={prefsMutation.isPending || !(prefs?.inAppEnabled ?? true)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
     </AppLayout>

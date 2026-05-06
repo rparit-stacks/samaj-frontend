@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Link } from "react-router-dom";
 import { 
   AlertTriangle, MessageSquare, MessageCircle, Image, FileText, 
-  Lightbulb, Heart, GraduationCap, Info, User, Settings, ChevronRight 
+  Lightbulb, Heart, GraduationCap, Info, User, Settings, ChevronRight, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +62,13 @@ const menuItems = [
     label: "Exams & Results", 
     description: "Competitive exams info",
     color: "bg-indigo-500/10 text-indigo-600"
+  },
+  { 
+    to: "/jobs", 
+    icon: ClipboardList, 
+    label: "Jobs", 
+    description: "Open roles and opportunities",
+    color: "bg-violet-500/10 text-violet-600"
   },
 ];
 

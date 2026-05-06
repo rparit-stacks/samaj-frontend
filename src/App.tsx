@@ -54,6 +54,7 @@ import FindMembers from "./pages/FindMembers";
 import Notifications from "./pages/Notifications";
 import ContactRequests from "./pages/ContactRequests";
 import Search from "./pages/Search";
+import Donate from "./pages/Donate";
 import NotFound from "./pages/NotFound";
 // Admin Pages
 import AdminInstall from "./pages/admin/AdminInstall";
@@ -80,6 +81,19 @@ import AdminAchievements from "./pages/admin/AdminAchievements";
 import AdminHistory from "./pages/admin/AdminHistory";
 import AdminCommunity from "./pages/admin/AdminCommunity";
 import AdminDirectory from "./pages/admin/AdminDirectory";
+import AdminDonations from "./pages/admin/AdminDonations";
+import AdminBusiness from "./pages/admin/AdminBusiness";
+import AdminJobs from "./pages/admin/AdminJobs";
+import Business from "./pages/Business";
+import BusinessDetail from "./pages/BusinessDetail";
+import BusinessForm from "./pages/BusinessForm";
+import BusinessMy from "./pages/BusinessMy";
+import Jobs from "./pages/Jobs";
+import JobDetail from "./pages/JobDetail";
+import JobSubmit from "./pages/JobSubmit";
+import JobsMy from "./pages/JobsMy";
+import JobsMyDetail from "./pages/JobsMyDetail";
+import JobEdit from "./pages/JobEdit";
 // Auth Pages
 import UserLogin from "./pages/auth/UserLogin";
 import UserSignup from "./pages/auth/UserSignup";
@@ -182,6 +196,9 @@ const App = () => {
             <Route path="/admin/audit-logs" element={<AdminProtectedRoute><AdminAuditLogs /></AdminProtectedRoute>} />
             <Route path="/admin/achievements" element={<AdminProtectedRoute><AdminAchievements /></AdminProtectedRoute>} />
             <Route path="/admin/history" element={<AdminProtectedRoute><AdminHistory /></AdminProtectedRoute>} />
+            <Route path="/admin/donations" element={<AdminProtectedRoute><AdminDonations /></AdminProtectedRoute>} />
+            <Route path="/admin/business" element={<AdminProtectedRoute><AdminBusiness /></AdminProtectedRoute>} />
+            <Route path="/admin/jobs" element={<AdminProtectedRoute><AdminJobs /></AdminProtectedRoute>} />
             <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
 
             {/* Maintenance Mode - public, no auth required */}
@@ -243,6 +260,18 @@ const App = () => {
               <Route path="/contact-requests" element={<ProtectedRoute><ContactRequests /></ProtectedRoute>} />
               <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/donate" element={<ProtectedRoute><Donate /></ProtectedRoute>} />
+              <Route path="/business" element={<ProtectedRoute><Business /></ProtectedRoute>} />
+              <Route path="/business/create" element={<ProtectedRoute><BusinessForm /></ProtectedRoute>} />
+              <Route path="/business/my" element={<ProtectedRoute><BusinessMy /></ProtectedRoute>} />
+              <Route path="/business/:id/edit" element={<ProtectedRoute><BusinessForm /></ProtectedRoute>} />
+              <Route path="/business/:id" element={<ProtectedRoute><BusinessDetail /></ProtectedRoute>} />
+              <Route path="/jobs/submit" element={<ProtectedRoute><JobSubmit /></ProtectedRoute>} />
+              <Route path="/jobs/my/:id/edit" element={<ProtectedRoute><JobEdit /></ProtectedRoute>} />
+              <Route path="/jobs/my/:id" element={<ProtectedRoute><JobsMyDetail /></ProtectedRoute>} />
+              <Route path="/jobs/my" element={<ProtectedRoute><JobsMy /></ProtectedRoute>} />
+              <Route path="/jobs/:id" element={<ProtectedRoute><JobDetail /></ProtectedRoute>} />
+              <Route path="/jobs" element={<ProtectedRoute><Jobs /></ProtectedRoute>} />
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

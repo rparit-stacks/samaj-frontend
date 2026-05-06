@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth/(.*)",
+      "destination": "http://16.171.40.180:8080/auth/$1"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "http://16.171.40.180:8080/api/$1"
+    },
+    {
+      "source": "/files/(.*)",
+      "destination": "http://16.171.40.180:8080/files/$1"
+    },
+    {
+      "source": "/admin-api/(.*)",
+      "destination": "http://16.171.40.180:8080/admin/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

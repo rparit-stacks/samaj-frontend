@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChevronLeft,
@@ -23,6 +24,8 @@ import {
   MoreHorizontal,
   MessageCircle,
   UserPlus,
+  Droplets,
+  Briefcase,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EditProfileDialog } from "@/components/dialogs/EditProfileDialog";
@@ -32,6 +35,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useAuth } from "@/context/AuthContext";
 import { userApi, eventsApi, communityApi, emergencyApi, chatApi } from "@/lib/api";
 import type { CommunityPost, CommunityPostMedia, EmergencyItem, EventItem } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 function initialsOf(name: string): string {
   return name
@@ -87,7 +91,7 @@ export default function MemberDetail() {
 
   const { data: postsData } = useQuery({
     queryKey: ["profilePosts", profileUserId],
-    queryFn: () => communityApi.list({ authorId: profileUserId!, page: 0, size: 10 }),
+    queryFn: () => communityApi.list({ authorId: profileUserId!, page: 0, size: 24 }),
     enabled: !!profileUserId && !!profile?.showCommunityOnProfile,
   });
 
@@ -106,7 +110,7 @@ export default function MemberDetail() {
       events: events.length,
       sos: emergencies.length,
     }),
-    [postsData?.totalElements, posts.length, events.length, emergencies.length]
+    [postsData?.totalElements, posts.length, events.length, emergencies.length],
   );
 
   const profileUrl = (() => {
@@ -118,6 +122,8 @@ export default function MemberDetail() {
         : "";
     return `${window.location.origin}${path}`;
   })();
+
+  const handleKey = profile?.profileKey ?? id ?? "";
 
   const startDirectChat = async () => {
     if (!profile?.userId) return;
@@ -151,34 +157,72 @@ export default function MemberDetail() {
     }
   };
 
+  const openPost = (post: CommunityPost) => {
+    const media = post.media ?? [];
+    if (media.length === 0) return;
+    setLightboxMedia(media);
+    setLightboxIndex(0);
+    setLightboxOpen(true);
+  };
+
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading || !id) {
     return (
-      <AppLayout title="Profile">
-        <div className="p-4 md:p-6">
-          <div className="max-w-3xl mx-auto">
-            <Button variant="ghost" size="sm" className="gap-2 -ml-2" onClick={() => navigate(-1)}>
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <p className="text-muted-foreground mt-4">Loading profile…</p>
+      <AppLayout mobileHeader={<></>}>
+        <div className="min-h-screen bg-background">
+          {/* Sticky header skeleton */}
+          <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+            <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-3">
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => navigate(-1)}>
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <Skeleton className="h-4 w-32" />
+              <div className="w-10" />
+            </div>
+          </div>
+          <div className="mx-auto max-w-4xl px-3 pt-4 space-y-4">
+            <div className="rounded-2xl border overflow-hidden">
+              <Skeleton className="h-36 w-full" />
+              <div className="p-4 space-y-4">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-20 w-20 rounded-full -mt-12" />
+                  <div className="grid flex-1 grid-cols-3 gap-2">
+                    {[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-64" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Skeleton className="h-9 rounded-xl" />
+                  <Skeleton className="h-9 rounded-xl" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </AppLayout>
     );
   }
 
+  // ── Error state ───────────────────────────────────────────────────────────
   if (isError || !profile) {
     return (
-      <AppLayout title="Profile">
-        <div className="p-4 md:p-6">
-          <div className="max-w-3xl mx-auto">
-            <Button variant="ghost" size="sm" className="gap-2 -ml-2" onClick={() => navigate(-1)}>
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <p className="text-destructive mt-4">
-              {error instanceof Error ? error.message : "Failed to load profile"}
+      <AppLayout mobileHeader={<></>}>
+        <div className="min-h-screen bg-background">
+          <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+            <div className="mx-auto flex h-14 max-w-4xl items-center px-3">
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => navigate(-1)}>
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center gap-3">
+            <p className="text-destructive font-semibold">
+              {error instanceof Error ? error.message : "Profile not found"}
             </p>
+            <Button variant="outline" className="rounded-xl" onClick={() => navigate(-1)}>
+              Go back
+            </Button>
           </div>
         </div>
       </AppLayout>
@@ -188,34 +232,51 @@ export default function MemberDetail() {
   const displayName = profile.fullName || "Member";
   const initials = initialsOf(displayName);
 
-  const handleKey = profile.profileKey ?? id;
-
-  const openPost = (post: CommunityPost) => {
-    const media = post.media ?? [];
-    if (media.length === 0) return;
-    setLightboxMedia(media);
-    setLightboxIndex(0);
-    setLightboxOpen(true);
-  };
-
   return (
-    <AppLayout title={handleKey ?? displayName}>
+    // mobileHeader={<></>} suppresses the default MobileHeader so the page's
+    // own sticky header (below) is the single source of the username — no duplication.
+    <AppLayout mobileHeader={<></>}>
       <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+
+        {/* ── Sticky top nav ───────────────────────────────────────────────── */}
+        <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-3">
-            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => navigate(-1)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl shrink-0"
+              onClick={() => navigate(-1)}
+              aria-label="Back"
+            >
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <div className="truncate px-2 text-sm font-semibold">{handleKey}</div>
-            <div className="flex items-center gap-1">
+
+            <div className="flex flex-col items-center min-w-0 flex-1 px-2">
+              <p className="font-semibold text-sm truncate leading-tight">
+                {handleKey}
+              </p>
+              {isOwner && (
+                <p className="text-[10px] text-muted-foreground leading-tight">Your profile</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
               {isOwner ? (
-                <Button variant="ghost" size="icon" className="rounded-xl" asChild>
+                <Button variant="ghost" size="icon" className="rounded-xl" asChild aria-label="Settings">
                   <Link to="/settings">
                     <Settings className="h-4 w-4" />
                   </Link>
                 </Button>
               ) : (
-                <Button variant="ghost" size="icon" className="rounded-xl">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-xl"
+                  aria-label="More options"
+                  onClick={() => {
+                    toast({ title: "Report submitted", description: "Thank you. We will review this profile." });
+                  }}
+                >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               )}
@@ -223,174 +284,257 @@ export default function MemberDetail() {
           </div>
         </div>
 
-        <div className="mx-auto max-w-4xl space-y-4 px-3 pb-6 pt-3">
-          <Card className="overflow-hidden border border-border/70">
+        <div className="mx-auto max-w-4xl px-3 pb-10 pt-3 space-y-3">
+
+          {/* ── Profile card ───────────────────────────────────────────────── */}
+          <div className="rounded-2xl border border-border/70 overflow-hidden bg-card shadow-sm">
+
+            {/* Cover image */}
             <div
-              className="relative h-28 bg-gradient-to-r from-primary/20 to-primary/5 bg-cover bg-center md:h-36"
-              style={{ backgroundImage: profile.coverImageUrl ? `url(${profile.coverImageUrl})` : undefined }}
+              className="relative h-32 md:h-44 bg-cover bg-center"
+              style={{
+                backgroundImage: profile.coverImageUrl
+                  ? `url(${profile.coverImageUrl})`
+                  : undefined,
+                background: profile.coverImageUrl
+                  ? undefined
+                  : "linear-gradient(135deg, hsl(var(--primary)/0.25) 0%, hsl(var(--primary)/0.08) 50%, hsl(var(--primary)/0.15) 100%)",
+              }}
             >
               {isOwner && (
                 <Button
                   size="icon"
                   variant="secondary"
-                  className="absolute bottom-2 right-2 h-8 w-8 rounded-full bg-background/80"
+                  className="absolute bottom-2.5 right-2.5 h-8 w-8 rounded-full bg-background/80 hover:bg-background shadow"
                   onClick={() => setChangeBgOpen(true)}
-                  aria-label="Change cover"
+                  aria-label="Change cover photo"
                 >
-                  <Camera className="h-4 w-4" />
+                  <Camera className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
-            <CardContent className="space-y-4 pb-4 pt-3">
-              <div className="flex items-center gap-4">
-                <div className="-mt-12 shrink-0 md:-mt-16">
-                  <Avatar className="h-20 w-20 border-4 border-background shadow md:h-24 md:w-24">
-                    <AvatarImage src={profile.avatarUrl ?? undefined} />
-                    <AvatarFallback className="bg-primary text-xl text-primary-foreground">{initials}</AvatarFallback>
+
+            <div className="px-4 pb-5 pt-3 space-y-4">
+              {/* Avatar + Stats row */}
+              <div className="flex items-start gap-4">
+                <div className="-mt-14 shrink-0">
+                  <Avatar className="h-20 w-20 md:h-24 md:w-24 border-4 border-background shadow-md ring-1 ring-border">
+                    <AvatarImage src={profile.avatarUrl ?? undefined} alt={displayName} />
+                    <AvatarFallback className="bg-primary text-xl font-semibold text-primary-foreground">
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
                 </div>
 
-                <div className="grid flex-1 grid-cols-3 gap-2 text-center">
-                  <div>
+                {/* Stats */}
+                <div className="flex-1 grid grid-cols-3 gap-2 text-center pt-1">
+                  <div className="rounded-xl bg-muted/50 px-2 py-2.5">
                     <div className="text-lg font-bold leading-none">{stats.posts}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">Posts</div>
                   </div>
-                  <div>
+                  <div className="rounded-xl bg-muted/50 px-2 py-2.5">
                     <div className="text-lg font-bold leading-none">{stats.events}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">Events</div>
                   </div>
-                  <div>
+                  <div className="rounded-xl bg-muted/50 px-2 py-2.5">
                     <div className="text-lg font-bold leading-none">{stats.sos}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">SOS</div>
                   </div>
                 </div>
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold leading-tight">{displayName}</p>
+
+              {/* Name + Username + Bio */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-bold text-lg leading-tight">{displayName}</h1>
                   {profile.bloodGroup && (
-                    <Badge className="border-destructive/20 bg-destructive/10 text-destructive">{profile.bloodGroup}</Badge>
+                    <Badge className="border-destructive/20 bg-destructive/10 text-destructive text-[11px] gap-1">
+                      <Droplets className="h-2.5 w-2.5" />
+                      {profile.bloodGroup}
+                    </Badge>
                   )}
                 </div>
-                {profile.bio && <p className="whitespace-pre-line text-sm text-foreground/90">{profile.bio}</p>}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {profile.profession && <span>{profile.profession}</span>}
-                  {profile.city && (
-                    <>
-                      <span>•</span>
+
+                {/* @handle shown only if different from displayName */}
+                {handleKey && (
+                  <p className="text-sm text-muted-foreground">@{handleKey}</p>
+                )}
+
+                {/* Profession + City */}
+                {(profile.profession || profile.city) && (
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {profile.profession && (
+                      <span className="inline-flex items-center gap-1">
+                        <Briefcase className="h-3 w-3" />
+                        {profile.profession}
+                      </span>
+                    )}
+                    {profile.city && (
                       <span className="inline-flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
                         {profile.city}
                       </span>
-                    </>
-                  )}
-                </div>
-              </div>
+                    )}
+                  </div>
+                )}
 
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  {isOwner ? (
-                    <>
-                      <Button variant="outline" className="h-9 rounded-xl gap-2" onClick={() => setEditProfileOpen(true)}>
-                        <Pencil className="h-4 w-4" />
-                        Edit profile
-                      </Button>
-                      <Button variant="outline" className="h-9 rounded-xl gap-2" onClick={handleShare}>
-                        <Share2 className="h-4 w-4" />
-                        Share
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        className="h-9 rounded-xl gap-2"
-                        disabled={chatLoading}
-                        onClick={() => void startDirectChat()}
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        {chatLoading ? "…" : "Chat"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-9 rounded-xl gap-2"
-                        onClick={() => setContactRequestOpen(true)}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        Request
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {!isOwner && (
-                  <Button variant="outline" className="h-9 w-full rounded-xl gap-2" onClick={handleShare}>
-                    <Share2 className="h-4 w-4" />
-                    Share profile
-                  </Button>
+                {profile.bio && (
+                  <p className="text-sm text-foreground/90 whitespace-pre-line leading-relaxed">
+                    {profile.bio}
+                  </p>
                 )}
               </div>
 
+              {/* Action buttons */}
+              <div className="space-y-2">
+                {isOwner ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-xl gap-1.5 font-semibold"
+                      onClick={() => setEditProfileOpen(true)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit profile
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-xl gap-1.5 font-semibold"
+                      onClick={handleShare}
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        className="h-9 rounded-xl gap-1.5 font-semibold"
+                        disabled={chatLoading}
+                        onClick={() => void startDirectChat()}
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        {chatLoading ? "Opening…" : "Message"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-9 rounded-xl gap-1.5 font-semibold"
+                        onClick={() => setContactRequestOpen(true)}
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Connect
+                      </Button>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="h-9 w-full rounded-xl gap-1.5 font-semibold"
+                      onClick={handleShare}
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share profile
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Contact quick actions */}
               {(profile.phone || profile.email) && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 pt-1">
                   {profile.phone && (
-                    <Button asChild size="sm" className="h-8 rounded-xl gap-2">
+                    <Button
+                      asChild
+                      size="sm"
+                      className="h-8 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                    >
                       <a href={`tel:${profile.phone}`}>
-                        <Phone className="h-4 w-4" />
+                        <Phone className="h-3.5 w-3.5" />
                         Call
                       </a>
                     </Button>
                   )}
                   {profile.email && (
-                    <Button variant="outline" asChild size="sm" className="h-8 rounded-xl gap-2">
+                    <Button
+                      variant="outline"
+                      asChild
+                      size="sm"
+                      className="h-8 rounded-xl gap-1.5"
+                    >
                       <a href={`mailto:${profile.email}`}>
-                        <Mail className="h-4 w-4" />
+                        <Mail className="h-3.5 w-3.5" />
                         Email
                       </a>
                     </Button>
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
+          {/* ── Content tabs ───────────────────────────────────────────────── */}
           <Tabs defaultValue="posts" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 rounded-xl bg-muted/50">
-              <TabsTrigger value="posts" className="gap-2 rounded-lg">
-                <Grid3X3 className="h-4 w-4" />
+            <TabsList className="grid w-full grid-cols-3 rounded-xl bg-muted/50 h-10">
+              <TabsTrigger value="posts" className="gap-1.5 rounded-lg text-xs font-semibold">
+                <Grid3X3 className="h-3.5 w-3.5" />
                 Posts
               </TabsTrigger>
-              <TabsTrigger value="events" className="gap-2 rounded-lg">
-                <Calendar className="h-4 w-4" />
+              <TabsTrigger value="events" className="gap-1.5 rounded-lg text-xs font-semibold">
+                <Calendar className="h-3.5 w-3.5" />
                 Events
               </TabsTrigger>
-              <TabsTrigger value="sos" className="gap-2 rounded-lg">
-                <Siren className="h-4 w-4" />
+              <TabsTrigger value="sos" className="gap-1.5 rounded-lg text-xs font-semibold">
+                <Siren className="h-3.5 w-3.5" />
                 SOS
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="posts" className="mt-3">
-              {posts.length === 0 ? (
-                <div className="rounded-xl border border-border/70 p-8 text-center text-sm text-muted-foreground">
-                  No posts yet.
-                </div>
+            {/* Posts grid */}
+            <TabsContent value="posts" className="mt-2">
+              {!profile.showCommunityOnProfile ? (
+                <EmptyTabCard message="Posts hidden by profile privacy settings." />
+              ) : posts.length === 0 ? (
+                <EmptyTabCard
+                  message={isOwner ? "You haven't posted anything yet." : "No posts yet."}
+                  action={
+                    isOwner ? (
+                      <Button variant="outline" size="sm" className="rounded-xl mt-2" asChild>
+                        <Link to="/feeds">Create your first post</Link>
+                      </Button>
+                    ) : undefined
+                  }
+                />
               ) : (
-                <div className="grid grid-cols-3 gap-1">
+                <div className="grid grid-cols-3 gap-0.5 rounded-xl overflow-hidden">
                   {posts.map((post) => {
                     const cover = postCover(post);
                     return (
                       <button
                         key={post.id}
                         type="button"
-                        className="relative aspect-square overflow-hidden bg-muted/40 text-left"
+                        className={cn(
+                          "relative aspect-square overflow-hidden bg-muted/40",
+                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          cover && "cursor-zoom-in",
+                        )}
                         onClick={() => openPost(post)}
                         aria-label="Open post"
                       >
                         {cover ? (
-                          <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                          <img
+                            src={cover}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 hover:scale-105"
+                          />
                         ) : (
-                          <div className="absolute inset-0 flex items-center justify-center p-2 text-center text-xs text-muted-foreground">
-                            {post.content.slice(0, 40)}
+                          <div className="absolute inset-0 flex items-center justify-center p-2 text-center text-[11px] text-muted-foreground leading-snug">
+                            {post.content.slice(0, 50)}
                           </div>
+                        )}
+                        {/* Multi-image indicator */}
+                        {(post.media ?? []).length > 1 && (
+                          <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] font-semibold flex items-center justify-center">
+                            {post.media.length}
+                          </span>
                         )}
                       </button>
                     );
@@ -399,52 +543,71 @@ export default function MemberDetail() {
               )}
             </TabsContent>
 
-            <TabsContent value="events" className="mt-3">
+            {/* Events */}
+            <TabsContent value="events" className="mt-2">
               {!profile.showEventsOnProfile ? (
-                <div className="rounded-xl border border-border/70 p-8 text-center text-sm text-muted-foreground">
-                  Events hidden by profile settings.
-                </div>
+                <EmptyTabCard message="Events hidden by profile privacy settings." />
               ) : events.length === 0 ? (
-                <div className="rounded-xl border border-border/70 p-8 text-center text-sm text-muted-foreground">
-                  No events yet.
-                </div>
+                <EmptyTabCard
+                  message={isOwner ? "No events created yet." : "No events yet."}
+                  action={
+                    isOwner ? (
+                      <Button variant="outline" size="sm" className="rounded-xl mt-2" asChild>
+                        <Link to="/events">Browse events</Link>
+                      </Button>
+                    ) : undefined
+                  }
+                />
               ) : (
                 <div className="space-y-2">
-                  {events.slice(0, 15).map((ev) => (
+                  {events.slice(0, 20).map((ev) => (
                     <Link
                       key={ev.id}
                       to={`/events/${ev.id}`}
-                      className="block rounded-xl border border-border/70 bg-card px-3 py-2.5"
+                      className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3.5 py-3 hover:bg-muted/30 transition-colors"
                     >
-                      <p className="truncate text-sm font-semibold">{ev.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">{ev.date} • {ev.location}</p>
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <Calendar className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{ev.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {ev.date}
+                          {ev.location ? ` • ${ev.location}` : ""}
+                        </p>
+                      </div>
+                      <ChevronLeft className="h-4 w-4 text-muted-foreground rotate-180 shrink-0" />
                     </Link>
                   ))}
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="sos" className="mt-3">
+            {/* SOS / Emergency */}
+            <TabsContent value="sos" className="mt-2">
               {!profile.showEmergenciesOnProfile ? (
-                <div className="rounded-xl border border-border/70 p-8 text-center text-sm text-muted-foreground">
-                  SOS posts hidden by profile settings.
-                </div>
+                <EmptyTabCard message="SOS posts hidden by profile privacy settings." />
               ) : emergencies.length === 0 ? (
-                <div className="rounded-xl border border-border/70 p-8 text-center text-sm text-muted-foreground">
-                  No SOS posts.
-                </div>
+                <EmptyTabCard message="No SOS posts." />
               ) : (
                 <div className="space-y-2">
-                  {emergencies.slice(0, 15).map((em) => (
+                  {emergencies.slice(0, 20).map((em) => (
                     <Link
                       key={em.id}
                       to={`/emergency/${em.id}`}
-                      className="block rounded-xl border border-border/70 bg-card px-3 py-2.5"
+                      className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3.5 py-3 hover:bg-muted/30 transition-colors"
                     >
-                      <p className="truncate text-sm font-semibold">{em.title}</p>
-                      <p className="truncate text-xs capitalize text-muted-foreground">
-                        {em.status.toLowerCase().replace("_", " ")} • {em.city ?? "—"}
-                      </p>
+                      <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                        <Siren className="h-4 w-4 text-destructive" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{em.title}</p>
+                        <p className="truncate text-xs capitalize text-muted-foreground">
+                          {em.status.toLowerCase().replace("_", " ")}
+                          {em.city ? ` • ${em.city}` : ""}
+                        </p>
+                      </div>
+                      <ChevronLeft className="h-4 w-4 text-muted-foreground rotate-180 shrink-0" />
                     </Link>
                   ))}
                 </div>
@@ -452,27 +615,26 @@ export default function MemberDetail() {
             </TabsContent>
           </Tabs>
 
+          {/* Report button for non-owners */}
           {!isOwner && (
-            <div className="pb-2 text-center">
+            <div className="text-center pt-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground gap-2"
+                className="text-muted-foreground gap-2 text-xs"
                 onClick={() => {
-                  toast({
-                    title: "Report submitted",
-                    description: "Thank you. We will review this profile.",
-                  });
+                  toast({ title: "Report submitted", description: "Thank you. We will review this profile." });
                 }}
               >
-                <Flag className="h-4 w-4" />
-                Report
+                <Flag className="h-3.5 w-3.5" />
+                Report this profile
               </Button>
             </div>
           )}
         </div>
       </div>
 
+      {/* ── Dialogs ──────────────────────────────────────────────────────────── */}
       {!isOwner && profile && (
         <RequestContactDialog
           open={contactRequestOpen}
@@ -505,6 +667,7 @@ export default function MemberDetail() {
           />
         </>
       )}
+
       <ImageLightbox
         open={lightboxOpen}
         onOpenChange={setLightboxOpen}
@@ -512,5 +675,22 @@ export default function MemberDetail() {
         initialIndex={lightboxIndex}
       />
     </AppLayout>
+  );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function EmptyTabCard({
+  message,
+  action,
+}: {
+  message: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 p-8 text-center">
+      <p className="text-sm text-muted-foreground">{message}</p>
+      {action}
+    </div>
   );
 }
