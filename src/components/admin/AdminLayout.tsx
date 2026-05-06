@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, Calendar, AlertTriangle,
   MessageSquare, Image, Heart, GraduationCap, Settings, Bell,
-  LogOut, Search, Menu, X, ChevronDown, Shield, History, Trophy, BookOpen, HandCoins, Briefcase, ClipboardList,
+  LogOut, Search, Menu, X, ChevronDown, Shield, History, Trophy, BookOpen, HandCoins, Briefcase, ClipboardList, UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ const sidebarItemsAll = [
   { to: "/admin/donations", icon: HandCoins, label: "Donations" },
   { to: "/admin/business", icon: Briefcase, label: "Business" },
   { to: "/admin/jobs", icon: ClipboardList, label: "Job listings" },
+  { to: "/admin/sub-admins", icon: UserCheck, label: "Sub Admins" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
   { to: "/admin/audit-logs", icon: History, label: "Audit Logs" },
 ];
@@ -65,7 +66,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     const sidebarItems = sidebarItemsForBuild();
     if (!me) {
       // Fallback: show minimum until `/admin/system/me` loads.
-      const minimal = sidebarItems.filter((i) => i.to === "/admin/dashboard" || i.to === "/admin/settings");
+      const minimal = sidebarItems.filter((i) => i.to === "/admin/dashboard");
       return { allowedItems: minimal, isParentAdmin: false };
     }
     if (me.fullAccess || me.parentAdmin || String(me.role).toUpperCase() === "ADMIN") {
@@ -73,7 +74,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
     const keys = new Set((me.assignedServiceKeys ?? []).map((k) => String(k).toUpperCase()));
     const allowed = sidebarItems.filter((i) => {
-      if (i.to === "/admin/dashboard" || i.to === "/admin/settings") return true;
+      // Sub-admins should not see Settings (parent-only).
+      if (i.to === "/admin/dashboard") return true;
       if (i.to === "/admin/content") return keys.has("NEWS");
       if (i.to === "/admin/documents") return keys.has("DOCUMENTS");
       if (i.to === "/admin/emergency") return keys.has("EMERGENCY");
@@ -216,12 +218,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-primary text-sm font-medium">A</span>
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs font-bold uppercase">
+                        {me?.role === "ADMIN" ? "PA" : "SA"}
+                      </span>
                     </div>
-                    <div className="text-left hidden lg:block">
-                      <p className="text-sm font-medium text-slate-900">Admin User</p>
-                      <p className="text-xs text-slate-500">{isParentAdmin ? "Parent Admin" : "Sub Admin"}</p>
+                    <div className="text-left hidden lg:block max-w-[140px]">
+                      <p className="text-sm font-medium text-slate-900 truncate">
+                        {isParentAdmin ? "Parent Admin" : "Sub Admin"}
+                      </p>
+                      <p className="text-xs text-slate-500">{isParentAdmin ? "Full access" : "Restricted access"}</p>
                     </div>
                     <ChevronDown className="h-4 w-4 text-slate-500" />
                   </button>

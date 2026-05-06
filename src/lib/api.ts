@@ -351,7 +351,10 @@ export type AdminServiceKey =
   | "MATRIMONY"
   | "GALLERY"
   | "SUGGESTION"
-  | "ACHIEVER";
+  | "ACHIEVER"
+  | "BUSINESS"
+  | "DONATION"
+  | "JOBS";
 
 export interface AdminMeResponse {
   userId: string;
@@ -367,9 +370,115 @@ export interface AdminServiceCatalogEntry {
   adminPathPrefix: string;
 }
 
+export interface ChildAdminSummary {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  serviceKeys: string[];
+}
+
+export interface ChildAdminPageResponse {
+  content: ChildAdminSummary[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export interface AdminInvitationSummary {
+  id: string;
+  email: string;
+  serviceKeys: string[];
+  createdAt: string;
+  expiresAt: string;
+  accepted: boolean;
+}
+
 export const adminSystemApi = {
   me: () => adminApi<AdminMeResponse>("/admin/system/me"),
   catalog: () => adminApi<AdminServiceCatalogEntry[]>("/admin/system/catalog"),
+
+  // Child admin CRUD
+  listChildAdmins: (page = 0, size = 50) =>
+    adminApi<ChildAdminPageResponse>(`/admin/system/child-admins?page=${page}&size=${size}`),
+  getChildAdmin: (id: string) =>
+    adminApi<ChildAdminSummary>(`/admin/system/child-admins/${encodeURIComponent(id)}`),
+  updateChildAdmin: (id: string, body: { serviceKeys?: string[]; status?: string; newPassword?: string }) =>
+    adminApi<ChildAdminSummary>(`/admin/system/child-admins/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  // Invitation flow (email-based, OTP-verified)
+  inviteChildAdmin: (body: { email: string; serviceKeys: string[] }) =>
+    adminApi<AdminInvitationSummary>("/admin/system/child-admins/invite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listPendingInvitations: () =>
+    adminApi<AdminInvitationSummary[]>("/admin/system/invitations"),
+  cancelInvitation: (id: string) =>
+    adminApi<void>(`/admin/system/invitations/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+
+// ── Public invitation acceptance API (no JWT) ────────────────────────────────
+
+export interface InvitationDetails {
+  email: string;
+  serviceKeys: string[];
+  expiresAt: string;
+}
+
+export interface InviteAuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: { id: string; role: string };
+}
+
+// ── Google Sign-In ────────────────────────────────────────────────────────────
+
+export interface GoogleSignInResult {
+  kind: "login" | "signup";
+  // login
+  accessToken?: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  user?: UserResponse;
+  // signup (new user)
+  tempToken?: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+}
+
+export const googleApi = {
+  verifyIdToken: (idToken: string) =>
+    publicFetch<GoogleSignInResult>("/auth/google/id-token", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    }),
+  completeSignup: (body: { tempToken: string; name: string; phone?: string }) =>
+    publicFetch<AuthResponse>("/auth/google/complete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export const adminInvitationApi = {
+  getDetails: (token: string) =>
+    publicFetch<InvitationDetails>(`/auth/admin-invite/${encodeURIComponent(token)}`),
+  setPassword: (token: string, password: string) =>
+    publicFetch<void>(`/auth/admin-invite/${encodeURIComponent(token)}/set-password`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  verify: (token: string, otp: string) =>
+    publicFetch<InviteAuthResponse>(`/auth/admin-invite/${encodeURIComponent(token)}/verify`, {
+      method: "POST",
+      body: JSON.stringify({ otp }),
+    }),
 };
 
 /** Main-admin only (`/admin/users`); full account + privacy snapshot. */

@@ -8,6 +8,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminProtectedRoute } from "@/components/admin/AdminProtectedRoute";
+import { AdminParentRoute } from "@/components/admin/AdminParentRoute";
 import Index from "./pages/Index";
 import News from "./pages/News";
 import NewsDetail from "./pages/NewsDetail";
@@ -84,6 +85,8 @@ import AdminDirectory from "./pages/admin/AdminDirectory";
 import AdminDonations from "./pages/admin/AdminDonations";
 import AdminBusiness from "./pages/admin/AdminBusiness";
 import AdminJobs from "./pages/admin/AdminJobs";
+import AdminSubAdmins from "./pages/admin/AdminSubAdmins";
+import AdminInviteAccept from "./pages/admin/AdminInviteAccept";
 import Business from "./pages/Business";
 import BusinessDetail from "./pages/BusinessDetail";
 import BusinessForm from "./pages/BusinessForm";
@@ -98,6 +101,7 @@ import JobEdit from "./pages/JobEdit";
 import UserLogin from "./pages/auth/UserLogin";
 import UserSignup from "./pages/auth/UserSignup";
 import AuthCallback from "./pages/auth/AuthCallback";
+import GoogleCompleteProfile from "./pages/auth/GoogleCompleteProfile";
 import MaintenanceMode from "./pages/MaintenanceMode";
 
 const queryClient = new QueryClient();
@@ -167,6 +171,10 @@ const App = () => {
             {/* Admin Portal - separate auth (no user AuthProvider mounted) */}
             <Route path="/install" element={<AdminInstall />} />
             <Route path="/admin/login" element={<AdminLogin />} />
+            {/* Public invite-accept flow — no AdminProtectedRoute */}
+            <Route path="/admin/invite/:token" element={<AdminInviteAccept />} />
+            {/* Google Sign-In completion — public, no auth required */}
+            <Route path="/google-complete" element={<GoogleCompleteProfile />} />
             <Route path="/admin/dashboard" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
             <Route path="/admin/users" element={<AdminProtectedRoute><AdminUsers /></AdminProtectedRoute>} />
             <Route
@@ -192,13 +200,14 @@ const App = () => {
             <Route path="/admin/documents" element={<AdminProtectedRoute><AdminDocuments /></AdminProtectedRoute>} />
             <Route path="/admin/community" element={<AdminProtectedRoute><AdminCommunity /></AdminProtectedRoute>} />
             <Route path="/admin/directory" element={<AdminProtectedRoute><AdminDirectory /></AdminProtectedRoute>} />
-            <Route path="/admin/settings" element={<AdminProtectedRoute><AdminSettings /></AdminProtectedRoute>} />
+            <Route path="/admin/settings" element={<AdminParentRoute><AdminSettings /></AdminParentRoute>} />
             <Route path="/admin/audit-logs" element={<AdminProtectedRoute><AdminAuditLogs /></AdminProtectedRoute>} />
             <Route path="/admin/achievements" element={<AdminProtectedRoute><AdminAchievements /></AdminProtectedRoute>} />
             <Route path="/admin/history" element={<AdminProtectedRoute><AdminHistory /></AdminProtectedRoute>} />
             <Route path="/admin/donations" element={<AdminProtectedRoute><AdminDonations /></AdminProtectedRoute>} />
             <Route path="/admin/business" element={<AdminProtectedRoute><AdminBusiness /></AdminProtectedRoute>} />
             <Route path="/admin/jobs" element={<AdminProtectedRoute><AdminJobs /></AdminProtectedRoute>} />
+            <Route path="/admin/sub-admins" element={<AdminProtectedRoute><AdminSubAdmins /></AdminProtectedRoute>} />
             <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
 
             {/* Maintenance Mode - public, no auth required */}
