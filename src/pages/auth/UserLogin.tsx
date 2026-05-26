@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Eye, EyeOff, Mail, Shield } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Mail, Shield, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { z } from "zod";
@@ -16,8 +16,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { cn } from "@/lib/utils";
-import { googleApi } from "@/lib/api";
+import { authApi, googleApi } from "@/lib/api";
 import { startGoogleSignIn } from "@/lib/googleBridge";
 
 const loginSchema = z.object({
@@ -29,7 +34,7 @@ type LoginValues = z.infer<typeof loginSchema>;
 
 export default function UserLogin() {
   const navigate = useNavigate();
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, loginWithOtp, isAuthenticated, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) navigate("/", { replace: true });
@@ -40,6 +45,12 @@ export default function UserLogin() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [shake, setShake] = useState(false);
 
+  // OTP phase state (shown after password is verified and server has sent a code).
+  const [otpPhase, setOtpPhase] = useState(false);
+  const [otpIdentifier, setOtpIdentifier] = useState<string>("");
+  const [otp, setOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+
   const emailRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
 
@@ -49,28 +60,87 @@ export default function UserLogin() {
     mode: "onSubmit",
   });
 
+  const triggerShake = () => {
+    setShake(true);
+    window.setTimeout(() => setShake(false), 520);
+    try {
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        (navigator as Navigator & { vibrate?: (pattern: number | number[]) => boolean }).vibrate?.(
+          [35, 40, 35]
+        );
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleLogin = async (values: LoginValues) => {
+    if (otpPhase) {
+      // OTP submission path (when user presses Enter / clicks the primary button)
+      await handleVerifyOtp();
+      return;
+    }
     setIsLoading(true);
     try {
-      await login(values.email.trim(), values.password);
-      toast.success("Welcome back!");
-      navigate("/");
+      const result = await login(values.email.trim(), values.password);
+      if (result.kind === "challenge") {
+        setOtpIdentifier(result.identifier);
+        setOtpPhase(true);
+        setOtp("");
+        toast.success(result.message || "Verification code sent to your email.");
+      } else {
+        // Parent-admin bypass (no OTP).
+        toast.success("Welcome back!");
+        navigate("/");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed. Please try again.");
-      setShake(true);
-      window.setTimeout(() => setShake(false), 520);
-      try {
-        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-          (navigator as Navigator & { vibrate?: (pattern: number | number[]) => boolean }).vibrate?.(
-            [35, 40, 35]
-          );
-        }
-      } catch {
-        // ignore
-      }
+      triggerShake();
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerifyOtp = async () => {
+    const code = otp.trim().replace(/\s/g, "");
+    if (!/^\d{6}$/.test(code)) {
+      toast.error("Enter the 6-digit verification code");
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      await loginWithOtp(otpIdentifier, code);
+      toast.success("Welcome back!");
+      navigate("/");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid or expired code");
+      triggerShake();
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!otpIdentifier) return;
+    setOtpLoading(true);
+    try {
+      await authApi.sendOtp({
+        identifier: otpIdentifier,
+        type: "EMAIL",
+        purpose: "LOGIN",
+      });
+      toast.success("Verification code resent");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resend code");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleUseDifferentAccount = () => {
+    setOtpPhase(false);
+    setOtp("");
+    setOtpIdentifier("");
   };
 
   const handleGoogleLogin = () => {
@@ -156,10 +226,12 @@ export default function UserLogin() {
           {/* Heading */}
           <div className="text-center mt-5">
             <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              Welcome Back
+              {otpPhase ? "Verify It's You" : "Welcome Back"}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sign in to your Samaj account
+              {otpPhase
+                ? `Enter the 6-digit code sent to ${otpIdentifier}`
+                : "Sign in to your Samaj account"}
             </p>
           </div>
 
@@ -191,6 +263,7 @@ export default function UserLogin() {
                           inputMode="email"
                           autoComplete="email"
                           placeholder="you@example.com"
+                          disabled={otpPhase}
                           className="pr-11 h-12 text-base bg-background transition-shadow focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
                           enterKeyHint="next"
                           onKeyDown={(e) => {
@@ -231,6 +304,7 @@ export default function UserLogin() {
                           type={showPassword ? "text" : "password"}
                           autoComplete="current-password"
                           placeholder="••••••••"
+                          disabled={otpPhase}
                           className="pr-11 h-12 text-base bg-background transition-shadow focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
                           enterKeyHint="done"
                           onKeyDown={(e) => {
@@ -241,7 +315,8 @@ export default function UserLogin() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground tap-target inline-flex items-center justify-center rounded-xl transition-colors"
+                        disabled={otpPhase}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-40 tap-target inline-flex items-center justify-center rounded-xl transition-colors"
                         aria-label={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? (
@@ -256,27 +331,89 @@ export default function UserLogin() {
                 )}
               />
 
-              {/* Forgot */}
-              <div className="flex justify-end -mt-1">
-                <Link
-                  to="/forgot-password"
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Forgot Password?
-                </Link>
-              </div>
+              {/* Forgot — hide while in OTP phase */}
+              {!otpPhase && (
+                <div className="flex justify-end -mt-1">
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm font-semibold text-primary hover:underline"
+                  >
+                    Forgot Password?
+                  </Link>
+                </div>
+              )}
 
-              {/* Login CTA */}
+              {/* OTP block — shown after password is verified */}
+              {otpPhase && (
+                <div
+                  className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4"
+                  aria-live="polite"
+                >
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                    <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/90">
+                      Two-Step Verification
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Enter the 6-digit code sent to {otpIdentifier}.
+                  </p>
+
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <InputOTP
+                      maxLength={6}
+                      value={otp}
+                      onChange={(v) => setOtp(v)}
+                      autoFocus
+                      containerClassName="gap-1.5"
+                    >
+                      <InputOTPGroup className="gap-1.5">
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <InputOTPSlot
+                            key={i}
+                            index={i}
+                            className={cn(
+                              "h-10 w-9 sm:w-10 rounded-md border border-input bg-background text-sm font-semibold",
+                              "first:rounded-md last:rounded-md"
+                            )}
+                          />
+                        ))}
+                      </InputOTPGroup>
+                    </InputOTP>
+
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={otpLoading}
+                      className="text-[11px] font-bold tracking-[0.1em] uppercase text-primary disabled:text-muted-foreground disabled:cursor-not-allowed hover:underline shrink-0"
+                    >
+                      Resend
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleUseDifferentAccount}
+                    className="mt-3 text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground hover:text-primary"
+                  >
+                    ← Use a different account
+                  </button>
+                </div>
+              )}
+
+              {/* Primary CTA */}
               <Button
                 type="submit"
                 className="w-full h-12 text-base font-semibold"
-                disabled={isLoading}
+                disabled={isLoading || otpLoading}
               >
-                {isLoading ? (
+                {(isLoading || otpLoading) ? (
                   <span className="flex items-center gap-2">
                     <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    Signing in…
+                    {otpPhase ? "Verifying…" : "Signing in…"}
                   </span>
+                ) : otpPhase ? (
+                  "Verify & Continue"
                 ) : (
                   "Login"
                 )}
@@ -284,19 +421,22 @@ export default function UserLogin() {
             </form>
           </Form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
+          {/* Divider — hide during OTP step */}
+          {!otpPhase && (
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-background px-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
             </div>
-            <div className="relative flex justify-center">
-              <span className="bg-background px-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
-                Or continue with
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* Google */}
+          {!otpPhase && (
           <Button
             variant="outline"
             className="w-full h-12 text-base font-medium gap-2"
@@ -316,14 +456,17 @@ export default function UserLogin() {
             )}
             {googleLoading ? "Connecting…" : "Continue with Google"}
           </Button>
+          )}
 
           {/* Sign up link */}
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            New to Samaj?{" "}
-            <Link to="/signup" className="text-primary font-semibold hover:underline">
-              Create an account
-            </Link>
-          </p>
+          {!otpPhase && (
+            <p className="text-center text-sm text-muted-foreground mt-8">
+              New to Samaj?{" "}
+              <Link to="/signup" className="text-primary font-semibold hover:underline">
+                Create an account
+              </Link>
+            </p>
+          )}
         </div>
       </main>
 

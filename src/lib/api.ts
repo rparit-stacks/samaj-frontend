@@ -889,8 +889,18 @@ export const authApi = {
       body: JSON.stringify(body),
     }),
 
+  /**
+   * Password login is now a 2-step flow:
+   *   1) POST /auth/login with credentials → returns either:
+   *      - { otpRequired: true, identifier, type, message }  → client must call loginWithOtp
+   *      - { otpRequired: false, ...AuthResponse }           → parent-admin bypass, log in directly
+   *   2) POST /auth/login/otp with the 6-digit code → returns AuthResponse
+   */
   login: (body: { identifier: string; password: string }) =>
-    api<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+    api<LoginChallenge | (AuthResponse & { otpRequired: false })>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   loginWithOtp: (body: { identifier: string; otp: string }) =>
     api<AuthResponse>("/auth/login/otp", { method: "POST", body: JSON.stringify(body) }),
@@ -1925,6 +1935,14 @@ export interface AuthResponse {
   refreshToken: string;
   expiresIn: number;
   user: UserResponse;
+}
+
+/** Returned by POST /auth/login when the server is challenging the user for an OTP. */
+export interface LoginChallenge {
+  otpRequired: true;
+  identifier: string;
+  type: string; // "EMAIL" | "PHONE"
+  message?: string;
 }
 
 // User Service types

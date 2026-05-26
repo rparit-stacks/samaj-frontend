@@ -91,54 +91,122 @@ async function startWebGoogleSignIn(onToken: SignInCallback, onError: ErrorCallb
     return;
   }
   const google = (window as any).google;
+  let settled = false;
+  const fire = (idToken: string) => {
+    if (settled) return;
+    settled = true;
+    onToken(idToken);
+  };
+  const fail = (msg: string) => {
+    if (settled) return;
+    settled = true;
+    onError(msg);
+  };
+
   google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
-    callback: (response: { credential: string; error?: string }) => {
+    callback: (response: { credential?: string; error?: string }) => {
       if (response.credential) {
-        onToken(response.credential);
+        fire(response.credential);
       } else {
-        onError("Google Sign-In failed");
+        fail("Google Sign-In failed");
       }
     },
+    auto_select: false,
     cancel_on_tap_outside: false,
+    use_fedcm_for_prompt: true,
+    ux_mode: "popup",
   });
-  google.accounts.id.prompt((notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => {
-    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      // One Tap was suppressed — fall back to the explicit sign-in button flow
-      // This can happen if the user previously dismissed One Tap too many times
-      showGoogleSignInPopup(onToken, onError);
+
+  google.accounts.id.prompt((notification: {
+    isNotDisplayed: () => boolean;
+    isSkippedMoment: () => boolean;
+    isDismissedMoment?: () => boolean;
+    getNotDisplayedReason?: () => string;
+    getSkippedReason?: () => string;
+    getDismissedReason?: () => string;
+  }) => {
+    if (settled) return;
+    // One Tap suppressed (cooldown, FedCM disabled, browser policy, etc.) →
+    // fall back to a transient sign-in button that triggers the same id_token callback.
+    if (
+      notification.isNotDisplayed?.() ||
+      notification.isSkippedMoment?.() ||
+      notification.isDismissedMoment?.()
+    ) {
+      showGoogleSignInPopup(fire, fail);
     }
   });
 }
 
-/** Fallback when One Tap is suppressed: render a hidden sign-in button and click it. */
+/**
+ * Fallback when One Tap is suppressed: render a real Google sign-in button into a
+ * transient container and programmatically click it. The button uses the same
+ * `google.accounts.id.initialize` callback above, so we still get a JWT id_token.
+ */
 function showGoogleSignInPopup(onToken: SignInCallback, onError: ErrorCallback): void {
   const google = (window as any).google;
-  if (!google?.accounts?.oauth2) {
+  if (!google?.accounts?.id?.renderButton) {
     onError("Google Sign-In popup is not available");
     return;
   }
-  const tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: "openid email profile",
-    callback: (tokenResponse: { access_token?: string; error?: string }) => {
-      if (tokenResponse.error) {
-        onError(tokenResponse.error === "access_denied" ? "Google Sign-In was cancelled" : tokenResponse.error);
-        return;
+
+  // Build a transient, off-screen host for the GSI button.
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.left = "-10000px";
+  host.style.top = "-10000px";
+  host.style.opacity = "0";
+  host.style.pointerEvents = "none";
+  host.setAttribute("aria-hidden", "true");
+  document.body.appendChild(host);
+
+  let clicked = false;
+  const cleanup = () => {
+    try {
+      document.body.removeChild(host);
+    } catch {
+      // ignore
+    }
+  };
+
+  try {
+    google.accounts.id.renderButton(host, {
+      type: "standard",
+      theme: "outline",
+      size: "large",
+      width: 240,
+    });
+  } catch {
+    cleanup();
+    onError("Google Sign-In is not available");
+    return;
+  }
+
+  // GSI renders an iframe with a single inner button; the click opens the popup.
+  // Poll briefly until it mounts, then click it.
+  const start = Date.now();
+  const tick = () => {
+    if (clicked) return;
+    const clickable = host.querySelector<HTMLElement>("div[role=button], div[tabindex], iframe");
+    if (clickable) {
+      clicked = true;
+      // For the iframe variant, click() works on the wrapping div; for the div variant, click() opens popup.
+      try {
+        (clickable as HTMLElement).click();
+      } catch {
+        onError("Could not open Google Sign-In");
       }
-      // Exchange access token for ID token via userinfo
-      fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-      })
-        .then((r) => r.json())
-        .then((profile) => {
-          // Can't get ID token from access token alone — need to re-initialize with id_token_hint
-          // Fall back: tell user to try again (this path is rare)
-          onError("Please try signing in again.");
-          console.warn("Google fallback path hit — sub:", profile.sub);
-        })
-        .catch(() => onError("Could not retrieve Google profile"));
-    },
-  });
-  tokenClient.requestAccessToken({ prompt: "select_account" });
+      // We can remove the host after a short delay; the popup is decoupled.
+      window.setTimeout(cleanup, 1500);
+      return;
+    }
+    if (Date.now() - start > 4000) {
+      cleanup();
+      onError("Google Sign-In did not load. Please try again.");
+      return;
+    }
+    window.setTimeout(tick, 80);
+  };
+  tick();
 }

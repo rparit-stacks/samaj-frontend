@@ -7,6 +7,7 @@ import {
   refreshSession,
   startSessionKeepAlive,
   type AuthResponse,
+  type LoginChallenge,
   type UserResponse,
 } from "@/lib/api";
 
@@ -52,11 +53,23 @@ function syncAuthUserToProfile(u: UserResponse) {
   userApi.getSettings().catch(() => {}); // ensure user_settings row exists (getOrCreate)
 }
 
+/**
+ * Result of attempting password login:
+ *   - "session"   → password verified AND no 2FA required (parent admin bypass); session is live.
+ *   - "challenge" → password verified; server sent an OTP, client must verify it next.
+ */
+export type LoginResult =
+  | { kind: "session" }
+  | { kind: "challenge"; identifier: string; type: string; message?: string };
+
 interface AuthContextValue {
   user: UserResponse | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string) => Promise<void>;
+  /** Step 1: password login. Returns "challenge" when the server requires an OTP. */
+  login: (identifier: string, password: string) => Promise<LoginResult>;
+  /** Step 2: OTP login, called after a challenge to complete the session. */
+  loginWithOtp: (identifier: string, otp: string) => Promise<void>;
   /** After OTP verify / social callback: persist tokens and sync React auth state (same as login). */
   completeSession: (auth: AuthResponse) => void;
   logout: () => Promise<void>;
@@ -149,10 +162,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerFcmToken();
   }, []);
 
-  const login = useCallback(async (identifier: string, password: string) => {
-    const res = await authApi.login({ identifier, password });
-    completeSession(res);
-  }, [completeSession]);
+  const login = useCallback(
+    async (identifier: string, password: string): Promise<LoginResult> => {
+      const res = await authApi.login({ identifier, password });
+      if ("otpRequired" in res && res.otpRequired === true) {
+        const challenge = res as LoginChallenge;
+        return {
+          kind: "challenge",
+          identifier: challenge.identifier,
+          type: challenge.type,
+          message: challenge.message,
+        };
+      }
+      // Parent-admin bypass: server returned a full AuthResponse alongside otpRequired:false
+      const auth = res as AuthResponse;
+      completeSession(auth);
+      return { kind: "session" };
+    },
+    [completeSession]
+  );
+
+  const loginWithOtp = useCallback(
+    async (identifier: string, otp: string) => {
+      const auth = await authApi.loginWithOtp({ identifier, otp });
+      completeSession(auth);
+    },
+    [completeSession]
+  );
 
   const logout = useCallback(async () => {
     // Unregister FCM token before clearing auth headers so the request can authenticate
@@ -176,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithOtp,
         completeSession,
         logout,
         refreshUser,

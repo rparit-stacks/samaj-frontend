@@ -173,8 +173,6 @@ const App = () => {
             <Route path="/admin/login" element={<AdminLogin />} />
             {/* Public invite-accept flow — no AdminProtectedRoute */}
             <Route path="/admin/invite/:token" element={<AdminInviteAccept />} />
-            {/* Google Sign-In completion — public, no auth required */}
-            <Route path="/google-complete" element={<GoogleCompleteProfile />} />
             <Route path="/admin/dashboard" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
             <Route path="/admin/users" element={<AdminProtectedRoute><AdminUsers /></AdminProtectedRoute>} />
             <Route
@@ -219,6 +217,8 @@ const App = () => {
               <Route path="/login" element={<UserLogin />} />
               <Route path="/signup" element={<UserSignup />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              {/* Google Sign-In completion — needs AuthProvider for completeSession() */}
+              <Route path="/google-complete" element={<GoogleCompleteProfile />} />
 
               {/* Protected - requires login */}
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
