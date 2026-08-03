@@ -40,9 +40,10 @@ export default function Privacy() {
             it), and the visibility settings you control.
           </li>
           <li>
-            <strong>Approximate / precise location</strong> — where you grant location permission
-            (e.g. for emergency help or location-aware community features). You can deny or revoke
-            this permission in your device settings at any time.
+            <strong>Approximate location</strong> — only when you choose to add a location to a
+            community post. We show an in-app explanation first, then the system permission prompt.
+            We use approximate location (city/area), not continuous background tracking. You can deny
+            or revoke this in device settings and still type a place manually.
           </li>
           <li>
             <strong>KYC / identity documents</strong> — documents you upload when a feature

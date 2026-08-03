@@ -33,53 +33,17 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { TagPicker } from "@/components/ui/tag-picker";
+import { LocationPermissionDialog } from "@/components/dialogs/LocationPermissionDialog";
+import {
+  detectDeviceLocation,
+  getGeolocationPermissionState,
+  reverseGeocode,
+} from "@/lib/locationPermission";
 
 interface CreatePostDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (post: CommunityPost) => void;
-}
-
-async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=12`,
-      { headers: { Accept: "application/json" } },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      address?: {
-        city?: string;
-        town?: string;
-        village?: string;
-        suburb?: string;
-        state?: string;
-        state_district?: string;
-      };
-      name?: string;
-    };
-    const a = data.address ?? {};
-    const place = a.city || a.town || a.village || a.suburb || data.name;
-    const region = a.state || a.state_district;
-    const label = [place, region].filter(Boolean).join(", ");
-    return label || null;
-  } catch {
-    return null;
-  }
-}
-
-function detectDeviceLocation(): Promise<{ lat: number; lon: number }> {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Location not supported"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      (err) => reject(err),
-      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 60_000 },
-    );
-  });
 }
 
 export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDialogProps) {
@@ -89,13 +53,14 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
   const [emojiCodes, setEmojiCodes] = useState<string[]>([]);
   const [location, setLocation] = useState("");
   const [locStatus, setLocStatus] = useState<"idle" | "detecting" | "done" | "denied">("idle");
+  const [locationRationaleOpen, setLocationRationaleOpen] = useState(false);
+  const [locationPreviouslyDenied, setLocationPreviouslyDenied] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [showTags, setShowTags] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const autoLocRequested = useRef(false);
 
   const { data: profile } = useQuery<UserProfile>({
     queryKey: ["userProfile"],
@@ -112,7 +77,7 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
   const avatarUrl = profile?.avatarUrl ?? undefined;
   const profileCity = profile?.city?.trim() || "";
 
-  const applyAutoLocation = async () => {
+  const applyDeviceLocation = async () => {
     setLocStatus("detecting");
     try {
       const { lat, lon } = await detectDeviceLocation();
@@ -130,25 +95,46 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
       setLocation(`${lat.toFixed(3)}, ${lon.toFixed(3)}`);
       setLocStatus("done");
     } catch {
+      setLocStatus("denied");
       if (profileCity) {
         setLocation(profileCity);
-        setLocStatus("done");
+        toast({
+          title: "Using profile city",
+          description: "Location permission was denied. You can edit the place name anytime.",
+        });
       } else {
-        setLocStatus("denied");
+        toast({
+          title: "Location unavailable",
+          description: "You can type a city or place in the location field instead.",
+          variant: "destructive",
+        });
       }
     }
   };
 
-  useEffect(() => {
-    if (!open) {
-      autoLocRequested.current = false;
+  /** Play-compliant: rationale first (if needed), then OS prompt — never auto on open. */
+  const requestLocationFromUser = async () => {
+    const state = await getGeolocationPermissionState();
+    if (state === "granted") {
+      await applyDeviceLocation();
       return;
     }
-    if (autoLocRequested.current) return;
-    autoLocRequested.current = true;
-    // Prefer profile city instantly, then refine with GPS.
+    if (state === "denied") {
+      setLocationPreviouslyDenied(true);
+      setLocationRationaleOpen(true);
+      return;
+    }
+    setLocationPreviouslyDenied(false);
+    setLocationRationaleOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      setLocationRationaleOpen(false);
+      return;
+    }
+    // Prefill profile city only — do NOT call GPS until the user taps location.
     if (profileCity && !location) setLocation(profileCity);
-    void applyAutoLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, profileCity]);
 
@@ -175,9 +161,10 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
     setEmojiCodes([]);
     setLocation("");
     setLocStatus("idle");
+    setLocationRationaleOpen(false);
+    setLocationPreviouslyDenied(false);
     setTags([]);
     setShowTags(false);
-    autoLocRequested.current = false;
   };
 
   const handleClose = () => {
@@ -237,6 +224,7 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
   const canPost = Boolean(content.trim() || files.length > 0) && !isSubmitting;
 
   return (
+    <>
     <Sheet
       open={open}
       onOpenChange={(o) => {
@@ -303,7 +291,7 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
               <button
                 type="button"
                 className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-muted/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted"
-                onClick={() => void applyAutoLocation()}
+                onClick={() => void requestLocationFromUser()}
               >
                 {locStatus === "detecting" ? (
                   <>
@@ -449,7 +437,7 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
                 variant="ghost"
                 size="icon"
                 className="h-10 w-10 rounded-full"
-                onClick={() => void applyAutoLocation()}
+                onClick={() => void requestLocationFromUser()}
                 title="Refresh location"
               >
                 <MapPin className={cn("h-5 w-5", location ? "text-primary" : "text-rose-500")} />
@@ -487,5 +475,15 @@ export function CreatePostDialog({ open, onOpenChange, onCreated }: CreatePostDi
         </div>
       </SheetContent>
     </Sheet>
+
+    <LocationPermissionDialog
+      open={locationRationaleOpen}
+      onOpenChange={setLocationRationaleOpen}
+      previouslyDenied={locationPreviouslyDenied}
+      onAllow={() => {
+        void applyDeviceLocation();
+      }}
+    />
+    </>
   );
 }

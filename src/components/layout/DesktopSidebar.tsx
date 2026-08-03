@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const navItems = [
   { to: "/", icon: Home, label: "Home" },
@@ -99,9 +100,7 @@ export function DesktopSidebar({ collapsed, onToggle }: DesktopSidebarProps) {
         "flex items-center h-16 px-4 border-b border-sidebar-border",
         collapsed ? "justify-center" : "gap-3"
       )}>
-        <div className="w-10 h-10 rounded-xl bg-sidebar-primary flex items-center justify-center flex-shrink-0">
-          <span className="text-sidebar-primary-foreground font-bold text-lg">स</span>
-        </div>
+        <BrandLogo className="w-10 h-10 flex-shrink-0" rounded="xl" />
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sidebar-foreground text-lg truncate">Samaj</h1>

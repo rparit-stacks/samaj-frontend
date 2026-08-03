@@ -6,6 +6,7 @@ import { MobileDrawer } from "./MobileDrawer";
 import { useAuth } from "@/context/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { notificationApi } from "@/lib/api";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface MobileHeaderProps {
   title?: string;
@@ -21,6 +22,7 @@ export function MobileHeader({ title = "Samaj" }: MobileHeaderProps) {
   });
 
   const unread = unreadData?.unread ?? 0;
+  const showBrand = title === "Samaj";
 
   return (
     <header className="sticky top-0 z-40 md:hidden">
@@ -45,10 +47,18 @@ export function MobileHeader({ title = "Samaj" }: MobileHeaderProps) {
             </Sheet>
           </div>
 
-          {/* Center: page title */}
-          <h1 className="min-w-0 text-center text-base font-semibold text-foreground truncate px-1">
-            {title}
-          </h1>
+          {/* Center: page title / brand */}
+          {showBrand ? (
+            <div className="flex min-w-0 items-center justify-center gap-2 px-1">
+              <BrandLogo className="h-8 w-8" rounded="xl" />
+              <h1 className="text-base font-semibold text-foreground truncate">Samaj</h1>
+            </div>
+          ) : (
+            <h1 className="min-w-0 text-center text-base font-semibold text-foreground truncate px-1">
+              {title}
+            </h1>
+          )}
+
 
           {/* Right: Chat + Notifications */}
           <div className="flex items-center justify-end gap-0.5">

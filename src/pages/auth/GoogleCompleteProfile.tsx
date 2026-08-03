@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthField } from "@/components/auth/AuthField";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface LocationState {
   tempToken?: string;
@@ -87,7 +88,7 @@ export default function GoogleCompleteProfile() {
   return (
     <AuthShell>
       <div className="pt-4 animate-slide-up">
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center gap-2.5 mb-8">
           <button
             type="button"
             onClick={() => navigate("/login", { replace: true })}
@@ -96,6 +97,7 @@ export default function GoogleCompleteProfile() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
+          <BrandLogo className="h-8 w-8" rounded="xl" />
           <span className="text-sm font-bold tracking-[0.18em] text-primary uppercase">Samaj</span>
         </div>
 

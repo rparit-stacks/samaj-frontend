@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Mail, Shield, ShieldCheck, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, ShieldCheck, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { z } from "zod";
@@ -19,6 +19,7 @@ import { startGoogleSignIn, isNativeAppShell } from "@/lib/googleBridge";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthField } from "@/components/auth/AuthField";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const ONBOARDING_KEY = "samaj_onboarding_done";
 
@@ -195,9 +196,7 @@ export default function UserLogin() {
     return (
       <AuthShell footer={null}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 animate-fade-in">
-          <div className="h-14 w-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-md)]">
-            <Shield className="h-7 w-7" strokeWidth={2.2} />
-          </div>
+          <BrandLogo className="h-14 w-14 shadow-[var(--shadow-md)]" />
           <div className="h-1.5 w-24 rounded-full skeleton-shimmer" />
         </div>
       </AuthShell>
@@ -209,15 +208,12 @@ export default function UserLogin() {
       <div className="pt-6 animate-slide-up">
         {/* Brand mark */}
         <div className="flex justify-center">
-          <div
+          <BrandLogo
             className={cn(
-              "inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-md)]",
+              "h-16 w-16 shadow-[var(--shadow-md)]",
               shake && "animate-vibrate"
             )}
-            aria-hidden="true"
-          >
-            <Shield className="h-7 w-7" strokeWidth={2.2} />
-          </div>
+          />
         </div>
 
         <div className="text-center mt-5">

@@ -21,17 +21,26 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+        applySystemBars();
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         // Re-apply after Capacitor/SplashScreen — they can reset icon style.
         applySystemBars();
+        // StatusBar plugin may flip icons after JS init — re-assert shortly after.
+        getWindow().getDecorView().postDelayed(this::applySystemBars, 300);
+        getWindow().getDecorView().postDelayed(this::applySystemBars, 900);
     }
 
     private void applySystemBars() {
         Window window = getWindow();
         View decor = window.getDecorView();
 
-        // Keep WebView laid out below status / above nav (no underlap).
+        // Prefer laid-out below status bar when the theme opts out of edge-to-edge.
         WindowCompat.setDecorFitsSystemWindows(window, true);
 
         window.setStatusBarColor(SYSTEM_BAR_COLOR);
@@ -45,7 +54,7 @@ public class MainActivity extends BridgeActivity {
         WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(window, decor);
         if (controller != null) {
-            // true = dark/black icons on light bar
+            // true = dark/black clock, battery, signal icons on light bar
             controller.setAppearanceLightStatusBars(true);
             controller.setAppearanceLightNavigationBars(true);
         }

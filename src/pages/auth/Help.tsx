@@ -25,6 +25,10 @@ const FAQS = [
     a: `Contact support at ${LEGAL.support.email} to link a password to a Google-created account.`,
   },
   {
+    q: "Why does the app ask for location?",
+    a: "Only when you tap Add location on a post. We show a short explanation first, then the system permission. Location is approximate (city/area) for the post label — we do not track you in the background. You can type a place manually instead.",
+  },
+  {
     q: "Is the app for adults only?",
     a: `Yes. ${LEGAL.appName} is intended for users aged ${LEGAL.minimumAge} and above.`,
   },

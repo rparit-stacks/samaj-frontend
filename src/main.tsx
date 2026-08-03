@@ -7,11 +7,12 @@ const STATUS_BAR_BG = "#FBF9F8";
 
 async function applyStatusBar() {
   const { StatusBar, Style } = await import("@capacitor/status-bar");
-  // Content must not draw under the system bar.
+  // Content must not draw under the system bar (where still supported).
   await StatusBar.setOverlaysWebView({ overlay: false });
   await StatusBar.setBackgroundColor({ color: STATUS_BAR_BG });
-  // Style.Dark = dark/black icons (for light backgrounds)
-  await StatusBar.setStyle({ style: Style.Dark });
+  // Capacitor Style.Light = dark/black icons (needed on cream/light bar).
+  // Style.Dark = white icons — invisible on #FBF9F8.
+  await StatusBar.setStyle({ style: Style.Light });
 }
 
 async function initNativeShell() {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Newspaper, Users, ShieldAlert, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const ONBOARDING_KEY = "samaj_onboarding_done";
 
@@ -72,7 +73,10 @@ export default function Onboarding() {
     <AuthShell footer={null}>
       <div className="flex flex-col min-h-[calc(100dvh-2rem)] pt-4 pb-safe-bottom">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold tracking-[0.2em] uppercase text-primary">Samaj</span>
+          <span className="inline-flex items-center gap-2">
+            <BrandLogo className="h-8 w-8" rounded="xl" />
+            <span className="text-sm font-bold tracking-[0.2em] uppercase text-primary">Samaj</span>
+          </span>
           <button
             type="button"
             onClick={finish}

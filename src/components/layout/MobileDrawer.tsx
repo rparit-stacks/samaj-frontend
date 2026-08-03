@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { userApi, type UserProfile } from "@/lib/api";
 import { SERVICE_GRID_ITEMS } from "@/lib/serviceGridItems";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface DrawerLinkItem {
   to: string;
@@ -130,9 +131,12 @@ export function MobileDrawer() {
     <div className="flex flex-col h-full bg-background max-h-[100dvh]">
       <div className="sticky top-0 z-10 glass border-b border-border/70 shrink-0">
         <div className="h-14 px-4 flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Menu</p>
-            <p className="font-semibold leading-tight truncate">Samaj</p>
+          <div className="min-w-0 flex items-center gap-2.5">
+            <BrandLogo className="h-9 w-9" rounded="xl" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Menu</p>
+              <p className="font-semibold leading-tight truncate">Samaj</p>
+            </div>
           </div>
           <SheetClose asChild>
             <button

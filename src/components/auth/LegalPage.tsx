@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface LegalPageProps {
   title: string;
@@ -16,7 +17,7 @@ export function LegalPage({ title, updated, children }: LegalPageProps) {
   return (
     <AuthShell footer={null} className="overflow-y-auto">
       <div className="pt-4 pb-10 animate-fade-in">
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2.5 mb-6">
           <button
             type="button"
             onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/login"))}
@@ -25,6 +26,7 @@ export function LegalPage({ title, updated, children }: LegalPageProps) {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
+          <BrandLogo className="h-8 w-8" rounded="xl" />
           <span className="text-sm font-bold tracking-[0.18em] text-primary uppercase">Samaj</span>
         </div>
 

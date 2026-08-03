@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Lock, Shield } from "lucide-react";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { adminAuthLogin, fetchSetupStatus, recordAdminSessionExpiry } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -103,10 +104,8 @@ export default function AdminLogin() {
         {/* Logo mark */}
         <div className="flex justify-center mb-8">
           <div className="relative">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-2xl shadow-blue-900/50">
-              <span className="text-white font-bold text-2xl leading-none select-none">स</span>
-            </div>
-            <div className="absolute -inset-2 rounded-3xl bg-blue-500/15 blur-lg -z-10" />
+            <BrandLogo className="h-16 w-16 shadow-2xl shadow-black/50" />
+            <div className="absolute -inset-2 rounded-3xl bg-rose-500/15 blur-lg -z-10" />
           </div>
         </div>
 

@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthField } from "@/components/auth/AuthField";
+import { BrandLogo } from "@/components/BrandLogo";
 import { StepProgress } from "@/components/auth/StepProgress";
 
 const TOTAL_STEPS = 4; // before OTP; OTP is step 5 visually
@@ -235,7 +236,7 @@ export default function UserSignup() {
   return (
     <AuthShell>
       <div className="pt-4">
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2.5 mb-5">
           <button
             type="button"
             onClick={goBack}
@@ -244,6 +245,7 @@ export default function UserSignup() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
+          <BrandLogo className="h-8 w-8" rounded="xl" />
           <span className="text-sm font-bold tracking-[0.18em] text-primary uppercase">Samaj</span>
         </div>
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, LifeBuoy, Shield } from "lucide-react";
+import { ArrowLeft, Mail, LifeBuoy } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthField } from "@/components/auth/AuthField";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const schema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
@@ -39,7 +40,7 @@ export default function ForgotPassword() {
   return (
     <AuthShell>
       <div className="pt-4 animate-slide-up">
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center gap-2.5 mb-8">
           <button
             type="button"
             onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/login"))}
@@ -48,13 +49,12 @@ export default function ForgotPassword() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
+          <BrandLogo className="h-8 w-8" rounded="xl" />
           <span className="text-sm font-bold tracking-[0.18em] text-primary uppercase">Samaj</span>
         </div>
 
         <div className="flex justify-center mb-5">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-md)]">
-            <Shield className="h-7 w-7" strokeWidth={2.2} />
-          </div>
+          <BrandLogo className="h-16 w-16 shadow-[var(--shadow-md)]" />
         </div>
 
         <div className="text-center">

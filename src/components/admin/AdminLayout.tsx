@@ -19,6 +19,7 @@ import {
 import { isAdminKycEnabled } from "@/lib/featureFlags";
 import { adminSystemApi, clearAdminTokensClientSide, startAdminSessionKeepAlive } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const sidebarItemsAll = [
   { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -121,9 +122,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-200 bg-white">
           <Link to="/admin/dashboard" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
-              <span className="text-primary font-semibold text-lg">स</span>
-            </div>
+            <BrandLogo className="w-9 h-9" rounded="xl" />
             {sidebarOpen && (
               <div>
                 <h1 className="font-semibold text-slate-900">Samaj Admin</h1>

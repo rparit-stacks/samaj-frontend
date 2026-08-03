@@ -11,6 +11,11 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: true,
+    /**
+     * Android 15+ forces edge-to-edge. "auto" adds WebView margins for system
+     * bars when the theme does not opt out — keeps time/battery icons visible.
+     */
+    adjustMarginsForEdgeToEdge: "auto",
   },
   // Deep links / App Links handled in AndroidManifest + DeepLinkHandler
   // Host: https://web.suryavanshisamaj.online  |  Custom: samaj://app/...
@@ -18,11 +23,16 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 1200,
       launchAutoHide: true,
-      backgroundColor: "#FBF9F8",
+      backgroundColor: "#000000",
     },
     StatusBar: {
-      // Dark/black icons on light bar (Capacitor: Style.DARK)
-      style: "DARK",
+      /**
+       * Capacitor naming (Android):
+       *   LIGHT = dark/black icons (for light backgrounds) ✓
+       *   DARK  = light/white icons (for dark backgrounds)
+       * Cream app bg → must use LIGHT or icons vanish on white bar.
+       */
+      style: "LIGHT",
       backgroundColor: "#FBF9F8",
       overlaysWebView: false,
     },

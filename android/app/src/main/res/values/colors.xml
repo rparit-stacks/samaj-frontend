@@ -5,5 +5,5 @@
     <color name="colorPrimaryDark">#FBF9F8</color>
     <color name="colorAccent">#E8A317</color>
     <color name="systemBar">#FBF9F8</color>
-    <color name="splashBackground">#FFFFFF</color>
+    <color name="splashBackground">#000000</color>
 </resources>

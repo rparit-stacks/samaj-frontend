@@ -54,9 +54,8 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
-
+    <!-- Permissions: only declare what we use at runtime -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Approximate location for optional post city label (user-initiated only) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 </manifest>
