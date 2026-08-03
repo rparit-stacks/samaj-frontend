@@ -1,43 +1,11 @@
-import { useMemo, useState, useEffect, type ReactNode } from "react";
-import { Capacitor } from "@capacitor/core";
-import { Battery, Signal, Wifi } from "lucide-react";
+import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
 interface AuthShellProps {
   children: ReactNode;
   footer?: ReactNode;
-  showStatusBar?: boolean;
   className?: string;
-}
-
-function FakeAndroidStatusBar() {
-  const [time, setTime] = useState(() => {
-    const d = new Date();
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: false });
-  });
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const d = new Date();
-      setTime(d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: false }));
-    }, 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  return (
-    <div
-      className="auth-status-bar flex items-center justify-between px-safe-5 h-8 text-[11px] font-semibold text-foreground/80 select-none"
-      aria-hidden="true"
-    >
-      <span className="tabular-nums tracking-wide">{time}</span>
-      <div className="flex items-center gap-2 shrink-0">
-        <Signal className="h-3 w-3" strokeWidth={2.5} />
-        <Wifi className="h-3 w-3" strokeWidth={2.5} />
-        <Battery className="h-3.5 w-3.5" strokeWidth={2.2} />
-      </div>
-    </div>
-  );
 }
 
 function DefaultFooter() {
@@ -75,22 +43,7 @@ function DefaultFooter() {
   );
 }
 
-export function AuthShell({
-  children,
-  footer,
-  showStatusBar,
-  className,
-}: AuthShellProps) {
-  const isNative = useMemo(() => {
-    try {
-      return Capacitor.isNativePlatform();
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const shouldShowBar = showStatusBar ?? !isNative;
-
+export function AuthShell({ children, footer, className }: AuthShellProps) {
   return (
     <div
       className={cn(
@@ -98,14 +51,12 @@ export function AuthShell({
         className
       )}
     >
+      {/* Real OS safe-area only (Capacitor). No fake status bar. */}
       <div className="native-status-inset md:hidden" aria-hidden />
 
-      {/* Single soft accent — restrained, not decorative clutter */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 overflow-hidden" aria-hidden="true">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-72 w-[140%] rounded-full bg-primary/[0.05] blur-3xl" />
       </div>
-
-      {shouldShowBar && <FakeAndroidStatusBar />}
 
       <div className="relative flex flex-1 flex-col">
         <main className="flex-1 w-full">
