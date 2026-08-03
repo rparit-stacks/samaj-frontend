@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/input-otp";
 import { cn } from "@/lib/utils";
 import { authApi, googleApi } from "@/lib/api";
-import { startGoogleSignIn } from "@/lib/googleBridge";
+import { startGoogleSignIn, isNativeAppShell } from "@/lib/googleBridge";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthField } from "@/components/auth/AuthField";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
@@ -53,6 +53,8 @@ export default function UserLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  /** Google Sign-In only on web — hidden in native Android/iOS app. */
+  const showGoogleLogin = useMemo(() => !isNativeAppShell(), []);
 
   const [otpPhase, setOtpPhase] = useState(false);
   const [otpIdentifier, setOtpIdentifier] = useState("");
@@ -405,7 +407,7 @@ export default function UserLogin() {
           </form>
         </Form>
 
-        {!otpPhase && (
+        {!otpPhase && showGoogleLogin && (
           <>
             <div className="relative my-6" aria-hidden="true">
               <div className="absolute inset-0 flex items-center">

@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 /**
  * Google Sign-In bridge utilities.
  *
@@ -49,6 +51,20 @@ export function isAndroidWebView(): boolean {
   if (typeof window === "undefined") return false;
   const ua = navigator.userAgent || "";
   return ua.includes("SamajApp/");
+}
+
+/**
+ * Native Android/iOS shell (Capacitor or Samaj WebView).
+ * Google Sign-In UI is web-only — hide the button in the mobile app.
+ */
+export function isNativeAppShell(): boolean {
+  if (typeof window === "undefined") return false;
+  if (isAndroidWebView()) return true;
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
 }
 
 /** True when Google Identity Services is available (web only). */
