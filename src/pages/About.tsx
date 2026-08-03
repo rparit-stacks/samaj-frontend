@@ -207,9 +207,9 @@ export default function About() {
               <div>
                 <h3 className="font-semibold mb-1">Head Office</h3>
                 <p className="text-sm text-muted-foreground">
-                  123 Community Lane<br />
-                  Connaught Place, New Delhi<br />
-                  India - 110001
+                  401, Heritage Building, 582, MG Road<br />
+                  Opposite Hukumchand Ghanta Ghar, New Palasia<br />
+                  Indore, Madhya Pradesh 452001, India
                 </p>
               </div>
             </div>
@@ -221,8 +221,11 @@ export default function About() {
               <div>
                 <h3 className="font-semibold mb-1">Phone</h3>
                 <p className="text-sm text-muted-foreground">
-                  +91 11 2345 6789<br />
-                  +91 98765 43210 (WhatsApp)
+                  <a href="tel:+919111811117" className="hover:text-primary">
+                    +91 91118 11117
+                  </a>
+                  <br />
+                  WhatsApp available
                 </p>
               </div>
             </div>
@@ -234,8 +237,9 @@ export default function About() {
               <div>
                 <h3 className="font-semibold mb-1">Email</h3>
                 <p className="text-sm text-muted-foreground">
-                  info@samaj.org<br />
-                  support@samaj.org
+                  <a href="mailto:help@suryavanshisamaj.online" className="hover:text-primary">
+                    help@suryavanshisamaj.online
+                  </a>
                 </p>
               </div>
             </div>

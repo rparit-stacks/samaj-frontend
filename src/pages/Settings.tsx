@@ -51,6 +51,7 @@ import {
   type PrivacySettings,
   type ServicePrivacyOverrides,
 } from "@/lib/api";
+import { LEGAL } from "@/lib/legalConfig";
 
 const SERVICE_LABELS: Record<keyof ServicePrivacyOverrides, string> = {
   showName: "Show my name",
@@ -470,17 +471,49 @@ export default function Settings() {
                 <CardDescription>Get help and contact us</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-between">
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => navigate("/help")}
+                >
                   <span className="flex items-center gap-2">
                     <HelpCircle className="h-4 w-4" />
                     Help Center
                   </span>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" className="w-full justify-between">
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => {
+                    window.location.href = `mailto:${LEGAL.support.email}`;
+                  }}
+                >
                   <span className="flex items-center gap-2">
                     <MessageSquare className="h-4 w-4" />
                     Contact Support
+                  </span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => navigate("/privacy")}
+                >
+                  <span className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Privacy Policy
+                  </span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => navigate("/terms")}
+                >
+                  <span className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    Terms of Service
                   </span>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -506,7 +539,10 @@ export default function Settings() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete your account and remove your data from our servers. All your posts, comments, and profile information will be lost.
+                        This action cannot be undone. This will permanently delete your account and
+                        remove or anonymise your personal data from our servers within 30 days, as
+                        described in our Privacy Policy. Shared community posts may be anonymised
+                        rather than removed.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

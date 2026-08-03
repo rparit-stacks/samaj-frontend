@@ -1,32 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Search as SearchIcon, Newspaper, Calendar, GraduationCap, Heart, AlertTriangle, UserRound, X } from "lucide-react";
+import {
+  Loader2,
+  Search as SearchIcon,
+  Newspaper,
+  Calendar,
+  GraduationCap,
+  Heart,
+  AlertTriangle,
+  UserRound,
+  X,
+  ChevronRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   searchApi,
   isSearchServiceType,
-  type SearchAllResponse,
   type SearchCategoryResponse,
   type SearchResultDto,
   type SearchServiceType,
 } from "@/lib/api";
-import { Link } from "react-router-dom";
 
-const serviceConfig: Record<SearchServiceType, { label: string; icon: React.ComponentType<{ className?: string }> ; badgeClass: string }> = {
-  USERS: { label: "Members", icon: UserRound, badgeClass: "bg-blue-500/10 text-blue-700 border-blue-500/20" },
-  NEWS: { label: "News", icon: Newspaper, badgeClass: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" },
-  EVENTS: { label: "Events", icon: Calendar, badgeClass: "bg-amber-500/10 text-amber-700 border-amber-500/20" },
-  EXAMS: { label: "Exams", icon: GraduationCap, badgeClass: "bg-purple-500/10 text-purple-700 border-purple-500/20" },
-  MATRIMONY: { label: "Matrimony", icon: Heart, badgeClass: "bg-pink-500/10 text-pink-700 border-pink-500/20" },
-  EMERGENCIES: { label: "Emergency", icon: AlertTriangle, badgeClass: "bg-destructive/10 text-destructive border-destructive/20" },
+const serviceConfig: Record<
+  SearchServiceType,
+  { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
+> = {
+  USERS: { label: "People", icon: UserRound, tone: "bg-sky-500/10 text-sky-700" },
+  NEWS: { label: "News", icon: Newspaper, tone: "bg-emerald-500/10 text-emerald-700" },
+  EVENTS: { label: "Events", icon: Calendar, tone: "bg-amber-500/10 text-amber-700" },
+  EXAMS: { label: "Exams", icon: GraduationCap, tone: "bg-violet-500/10 text-violet-700" },
+  MATRIMONY: { label: "Matrimony", icon: Heart, tone: "bg-rose-500/10 text-rose-700" },
+  EMERGENCIES: { label: "SOS", icon: AlertTriangle, tone: "bg-red-500/10 text-red-700" },
 };
 
 const allServices: SearchServiceType[] = ["USERS", "NEWS", "EVENTS", "EXAMS", "MATRIMONY", "EMERGENCIES"];
@@ -34,7 +44,7 @@ const allServices: SearchServiceType[] = ["USERS", "NEWS", "EVENTS", "EXAMS", "M
 const searchFallbackUi = {
   label: "Results",
   icon: SearchIcon,
-  badgeClass: "bg-muted text-muted-foreground border-border",
+  tone: "bg-muted text-muted-foreground",
 } as const;
 
 function searchServiceUi(service: string) {
@@ -60,7 +70,6 @@ export default function Search() {
 
   useEffect(() => {
     setQInput(initialQ);
-    // Keep service in sync when URL changes (e.g. back button).
     setService(initialService);
   }, [initialQ, initialService]);
 
@@ -86,6 +95,7 @@ export default function Search() {
 
   const isLoading = combinedQuery.isLoading || singleQuery.isLoading;
   const isError = combinedQuery.isError || singleQuery.isError;
+  const totalResults = useMemo(() => categories.reduce((acc, c) => acc + c.results.length, 0), [categories]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,35 +113,40 @@ export default function Search() {
     navigate("/search");
   };
 
-  const totalResults = useMemo(() => categories.reduce((acc, c) => acc + c.results.length, 0), [categories]);
-
   return (
     <AppLayout title="Search">
-      <div className="p-4 md:p-6 space-y-6">
-        {/* Header / Search bar */}
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Search</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Exams are queried on the server today; other category tabs use the same API and may show no matches until
-                those backends are connected.
-              </p>
-            </div>
-            {queryEnabled && (
-              <Badge variant="outline" className="text-sm">
-                {totalResults} results
-              </Badge>
+      <div className="mx-auto max-w-lg pb-6">
+        <div className="sticky top-0 z-20 border-b border-border/50 bg-background/95 px-3 py-3 backdrop-blur">
+          <form onSubmit={onSubmit} className="relative">
+            <SearchIcon className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={qInput}
+              onChange={(e) => setQInput(e.target.value)}
+              placeholder="Search people, news, events…"
+              className="h-11 rounded-full border-0 bg-muted/70 pl-10 pr-10 text-[15px]"
+              autoComplete="off"
+              autoFocus
+            />
+            {qInput.trim().length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full"
+                onClick={clear}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             )}
-          </div>
+          </form>
 
-          {/* Service filter (particular search) */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-            <Button
+          <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide">
+            <button
               type="button"
-              size="sm"
-              variant={service === "ALL" ? "default" : "outline"}
-              className="flex-shrink-0 rounded-full"
+              className={cn(
+                "h-8 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors",
+                service === "ALL" ? "bg-foreground text-background" : "bg-muted/70 text-muted-foreground",
+              )}
               onClick={() => {
                 setService("ALL");
                 const q = qInput.trim() || initialQ;
@@ -140,14 +155,15 @@ export default function Search() {
               }}
             >
               All
-            </Button>
+            </button>
             {allServices.map((s) => (
-              <Button
+              <button
                 key={s}
                 type="button"
-                size="sm"
-                variant={service === s ? "default" : "outline"}
-                className="flex-shrink-0 rounded-full"
+                className={cn(
+                  "h-8 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors",
+                  service === s ? "bg-foreground text-background" : "bg-muted/70 text-muted-foreground",
+                )}
                 onClick={() => {
                   setService(s);
                   const q = qInput.trim() || initialQ;
@@ -156,72 +172,49 @@ export default function Search() {
                 }}
               >
                 {serviceConfig[s].label}
-              </Button>
+              </button>
             ))}
           </div>
-
-          <form onSubmit={onSubmit} className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              placeholder="Type to search..."
-              className="pl-10"
-              autoComplete="off"
-            />
-            {qInput.trim().length > 0 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9"
-                onClick={clear}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </form>
         </div>
 
-        {/* Content */}
-        {!queryEnabled ? (
-          <Card>
-            <CardContent className="py-10">
-              <div className="text-center space-y-2">
-                <SearchIcon className="h-10 w-10 text-muted-foreground mx-auto" />
-                <p className="text-muted-foreground">
-                  Start typing to see results from{" "}
-                  {service === "ALL" ? "all services" : searchServiceUi(service).label}.
+        <div className="px-3 pt-3">
+          {!queryEnabled ? (
+            <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <SearchIcon className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold">Search the community</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Find members, news, events, exams and more.
                 </p>
               </div>
-            </CardContent>
-          </Card>
-        ) : isLoading ? (
-          <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : isError ? (
-          <Card>
-            <CardContent className="py-10">
-              <p className="text-destructive text-center">Search failed. Please try again.</p>
-            </CardContent>
-          </Card>
-        ) : categories.length === 0 ? (
-          <Card>
-            <CardContent className="py-10">
-              <div className="text-center space-y-2">
-                <AlertTriangle className="h-10 w-10 text-muted-foreground mx-auto" />
-                <p className="text-muted-foreground">No results found for "{initialQ}".</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {categories.map((cat) => (
-              <CategorySection key={cat.service} category={cat} />
-            ))}
-          </div>
-        )}
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+            </div>
+          ) : isError ? (
+            <p className="py-12 text-center text-sm text-destructive">Search failed. Try again.</p>
+          ) : categories.length === 0 || totalResults === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+              <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+              <p className="font-medium">No results for “{initialQ}”</p>
+              <p className="text-sm text-muted-foreground">Try another keyword or category.</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {queryEnabled && (
+                <p className="px-1 text-xs text-muted-foreground">
+                  {totalResults} result{totalResults === 1 ? "" : "s"}
+                </p>
+              )}
+              {categories.map((cat) => (
+                <CategorySection key={cat.service} category={cat} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </AppLayout>
   );
@@ -230,71 +223,59 @@ export default function Search() {
 function CategorySection({ category }: { category: SearchCategoryResponse }) {
   const config = searchServiceUi(category.service);
   const Icon = config.icon;
+  if (category.results.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("rounded-xl p-2", config.badgeClass)}>
-            <Icon className="h-5 w-5" />
-          </div>
-          <div>
-            <CardTitle className="text-lg">{config.label}</CardTitle>
-            <p className="text-sm text-muted-foreground">{category.results.length} shown</p>
-          </div>
-        </div>
-        <Badge variant="outline" className="text-xs">
-          {category.total} total
-        </Badge>
-      </CardHeader>
-
-      <CardContent className="space-y-2">
-        {category.results.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No matches.</p>
-        ) : (
-          <div className="space-y-1">
-            {category.results.map((r) => (
-              <SearchResultRow key={r.service + ":" + r.id} result={r} />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <section>
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-lg", config.tone)}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <h2 className="text-sm font-semibold">{config.label}</h2>
+        <span className="text-xs text-muted-foreground">{category.results.length}</span>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card">
+        {category.results.map((r, i) => (
+          <SearchResultRow
+            key={r.service + ":" + r.id}
+            result={r}
+            last={i === category.results.length - 1}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function SearchResultRow({ result }: { result: SearchResultDto }) {
+function SearchResultRow({ result, last }: { result: SearchResultDto; last?: boolean }) {
   const config = searchServiceUi(result.service);
   const Icon = config.icon;
 
   return (
     <Link
       to={result.link}
-      className="block rounded-xl border border-border/50 hover:border-primary/50 hover:bg-muted/40 transition-colors px-3 py-2"
+      className={cn(
+        "flex items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/40",
+        !last && "border-b border-border/40",
+      )}
     >
-      <div className="flex items-start gap-3">
-        {(result.imageUrl ?? "").trim() ? (
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={result.imageUrl ?? undefined} alt={result.title} />
-            <AvatarFallback>{result.title?.slice(0, 1)?.toUpperCase() ?? "?"}</AvatarFallback>
-          </Avatar>
-        ) : (
-          <div className={cn("rounded-xl p-2", config.badgeClass)}>
-            <Icon className="h-5 w-5" />
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <p className="font-medium truncate">{result.title}</p>
-          {(result.subtitle ?? "").trim().length > 0 && (
-            <p className="text-sm text-muted-foreground truncate">{result.subtitle}</p>
-          )}
-          {(result.description ?? "").trim().length > 0 && (
-            <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{result.description}</p>
-          )}
+      {(result.imageUrl ?? "").trim() ? (
+        <Avatar className="h-11 w-11 shrink-0">
+          <AvatarImage src={result.imageUrl ?? undefined} alt={result.title} />
+          <AvatarFallback>{result.title?.slice(0, 1)?.toUpperCase() ?? "?"}</AvatarFallback>
+        </Avatar>
+      ) : (
+        <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", config.tone)}>
+          <Icon className="h-5 w-5" />
         </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[14px] font-semibold">{result.title}</p>
+        {(result.subtitle ?? "").trim().length > 0 && (
+          <p className="truncate text-xs text-muted-foreground">{result.subtitle}</p>
+        )}
       </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
     </Link>
   );
 }
-

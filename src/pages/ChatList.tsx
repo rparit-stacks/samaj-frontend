@@ -8,7 +8,6 @@ import { useChatSocket, type ChatWsEvent } from "@/hooks/useChatSocket";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from "@/components/ui/dialog";
@@ -121,162 +120,164 @@ export default function ChatList() {
   return (
     <div className="flex min-h-screen bg-background">
       <DesktopSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0">
+        <div className="native-status-inset md:hidden" aria-hidden />
         <DesktopHeader />
-        <MobileHeader title="Chat" />
+        <MobileHeader title="Messages" />
 
-        <main className="flex-1 pb-20 md:pb-0">
-          <div className="max-w-2xl mx-auto p-4 space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <MessageSquare className="h-6 w-6 text-primary" />
-                  Chat
+        <main className="flex-1 pb-nav-safe md:pb-0">
+          <div className="mx-auto max-w-lg">
+            {/* Top bar */}
+            <div className="sticky top-0 z-10 border-b border-border/50 bg-background/95 px-3 py-2.5 backdrop-blur">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h1 className="text-xl font-bold tracking-tight">Messages</h1>
                   {totalUnread > 0 && (
-                    <Badge variant="destructive" className="ml-1">{totalUnread}</Badge>
+                    <p className="text-xs text-muted-foreground">{totalUnread} unread</p>
                   )}
-                </h1>
-                <p className="text-sm text-muted-foreground">Chat with community members</p>
-              </div>
-              <div className="flex gap-2">
-                <Button size="icon" variant="outline" onClick={() => refetch()}>
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="outline" className="rounded-xl gap-1.5" asChild>
-                  <Link to="/find-members">
-                    <UserRound className="h-4 w-4" />
-                    <span className="hidden sm:inline">Find</span>
-                  </Link>
-                </Button>
-                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="icon" className="bg-primary">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-h-[85vh] flex flex-col sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>New chat</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3 pt-1 overflow-y-auto flex-1 min-h-0">
-                      <Button variant="outline" className="w-full rounded-xl gap-2 justify-start" asChild>
-                        <Link to="/find-members" onClick={() => setDialogOpen(false)}>
-                          <UserRound className="h-4 w-4" />
-                          Open Find people (full screen)
-                        </Link>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button size="icon" variant="ghost" className="h-9 w-9 rounded-full" onClick={() => void refetch()}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9 rounded-full" asChild>
+                    <Link to="/find-members">
+                      <UserRound className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="icon" className="h-9 w-9 rounded-full">
+                        <Plus className="h-4 w-4" />
                       </Button>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Search members</label>
+                    </DialogTrigger>
+                    <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>New message</DialogTitle>
+                      </DialogHeader>
+                      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pt-1">
                         <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
-                            placeholder="Name, @id, email, phone, UUID…"
-                            className="pl-9 rounded-xl"
+                            placeholder="Search people…"
+                            className="rounded-full pl-9"
                             value={userPickQ}
                             onChange={(e) => setUserPickQ(e.target.value)}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground">At least 2 characters.</p>
-                      </div>
-                      <div className="rounded-xl border border-border/60 divide-y max-h-48 overflow-y-auto">
-                        {pickEnabled && memberSearch.isLoading && (
-                          <div className="p-4 flex justify-center">
-                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        <div className="divide-y overflow-hidden rounded-2xl border border-border/60">
+                          {pickEnabled && memberSearch.isLoading && (
+                            <div className="flex justify-center p-4">
+                              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            </div>
+                          )}
+                          {pickEnabled &&
+                            !memberSearch.isLoading &&
+                            (memberSearch.data?.content.length ?? 0) === 0 && (
+                              <p className="p-4 text-center text-sm text-muted-foreground">No matches</p>
+                            )}
+                          {(memberSearch.data?.content ?? []).map((m) => (
+                            <button
+                              key={m.userId}
+                              type="button"
+                              className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/40"
+                              onClick={() => void startChatWithUser(m)}
+                            >
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={m.avatarUrl ?? undefined} />
+                                <AvatarFallback>{initials(m.fullName)}</AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold">{m.fullName || "Member"}</p>
+                                {m.profileKey && (
+                                  <p className="truncate text-xs text-muted-foreground">@{m.profileKey}</p>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between py-1 text-xs font-medium text-muted-foreground"
+                          onClick={() => setShowUuidPaste((v) => !v)}
+                        >
+                          Paste user UUID
+                          <ChevronDown className={cn("h-4 w-4 transition-transform", showUuidPaste && "rotate-180")} />
+                        </button>
+                        {showUuidPaste && (
+                          <div className="space-y-2 rounded-2xl border bg-muted/20 p-3">
+                            <Input
+                              placeholder="00000000-0000-0000-0000-000000000000"
+                              value={newChatUserId}
+                              onChange={(e) => setNewChatUserId(e.target.value)}
+                            />
+                            <Button className="w-full rounded-full" onClick={() => void handleNewDirect()} disabled={!newChatUserId.trim()}>
+                              Start chat
+                            </Button>
                           </div>
                         )}
-                        {pickEnabled &&
-                          !memberSearch.isLoading &&
-                          (memberSearch.data?.content.length ?? 0) === 0 && (
-                            <p className="p-3 text-sm text-muted-foreground text-center">No matches</p>
-                          )}
-                        {(memberSearch.data?.content ?? []).map((m) => (
-                          <button
-                            key={m.userId}
-                            type="button"
-                            className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors"
-                            onClick={() => void startChatWithUser(m)}
-                          >
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={m.avatarUrl ?? undefined} />
-                              <AvatarFallback>{initials(m.fullName)}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{m.fullName || "Member"}</p>
-                              {m.profileKey && (
-                                <p className="text-xs text-muted-foreground truncate">@{m.profileKey}</p>
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground py-1"
-                        onClick={() => setShowUuidPaste((v) => !v)}
-                      >
-                        Paste user UUID instead
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", showUuidPaste && "rotate-180")} />
-                      </button>
-                      {showUuidPaste && (
-                        <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
-                          <Input
-                            placeholder="00000000-0000-0000-0000-000000000000"
-                            value={newChatUserId}
-                            onChange={(e) => setNewChatUserId(e.target.value)}
-                          />
-                          <Button className="w-full rounded-xl" onClick={() => void handleNewDirect()} disabled={!newChatUserId.trim()}>
-                            Start chat
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex gap-2 justify-end pt-1">
                         <DialogClose asChild>
-                          <Button variant="outline">Close</Button>
+                          <Button variant="outline" className="w-full rounded-full">
+                            Close
+                          </Button>
                         </DialogClose>
                       </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search"
+                  className="h-10 rounded-full border-0 bg-muted/60 pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
             </div>
 
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search conversations…"
-                className="pl-10"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-
-            {/* Conversation List */}
             {isLoading ? (
-              <div className="flex justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="space-y-1 px-2 py-2">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center gap-3 px-2 py-3">
+                    <div className="h-14 w-14 animate-pulse rounded-full bg-muted" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 w-1/3 animate-pulse rounded-full bg-muted" />
+                      <div className="h-3 w-2/3 animate-pulse rounded-full bg-muted" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : isError ? (
-              <div className="text-center py-12">
+              <div className="py-16 text-center">
                 <p className="text-destructive">Could not load chats</p>
-                <Button variant="outline" className="mt-3" onClick={() => refetch()}>Retry</Button>
+                <Button variant="outline" className="mt-3 rounded-full" onClick={() => void refetch()}>
+                  Retry
+                </Button>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-16 space-y-3">
-                <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto" />
-                <p className="text-muted-foreground font-medium">
-                  {search ? "No conversations match your search" : "No chats yet"}
-                </p>
-                {!search && (
-                  <p className="text-sm text-muted-foreground">
-                    Start a new chat using the + button above
+              <div className="flex flex-col items-center gap-3 px-6 py-20 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-foreground">
+                  <MessageSquare className="h-7 w-7" />
+                </div>
+                <div>
+                  <p className="font-semibold">{search ? "No conversations found" : "Your messages"}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {search ? "Try another name." : "Send a message to start a chat."}
                   </p>
+                </div>
+                {!search && (
+                  <Button className="mt-1 rounded-full" onClick={() => setDialogOpen(true)}>
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    New message
+                  </Button>
                 )}
               </div>
             ) : (
-              <div className="divide-y divide-border rounded-2xl border bg-card shadow-sm overflow-hidden">
-                {filtered.map(conv => (
+              <div>
+                {filtered.map((conv) => (
                   <ConversationRow key={conv.id} conv={conv} currentUserId={user?.id} />
                 ))}
               </div>
@@ -292,38 +293,37 @@ export default function ChatList() {
 
 function ConversationRow({ conv, currentUserId }: { conv: ChatConversationItem; currentUserId?: string }) {
   const isGroup = conv.type === "GROUP";
-  const otherParticipant = conv.participants.find(p => p.userId !== currentUserId);
+  const otherParticipant = conv.participants.find((p) => p.userId !== currentUserId);
+  const unread = conv.unreadCount > 0;
 
   return (
     <Link
       to={`/chat/${conv.id}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
+      className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40 active:bg-muted/60"
     >
-      <div className="relative">
-        <Avatar className="h-12 w-12">
-          <AvatarImage src={conv.avatarUrl ?? undefined} />
-          <AvatarFallback className={isGroup ? "bg-primary/10" : ""}>
-            {isGroup ? <Users className="h-5 w-5" /> : initials(conv.name ?? otherParticipant?.displayName)}
-          </AvatarFallback>
-        </Avatar>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <p className={`font-semibold truncate ${conv.unreadCount > 0 ? "text-foreground" : "text-foreground/80"}`}>
+      <Avatar className="h-14 w-14 shrink-0">
+        <AvatarImage src={conv.avatarUrl ?? otherParticipant?.avatarUrl ?? undefined} />
+        <AvatarFallback className={isGroup ? "bg-primary/10 text-primary" : "bg-muted"}>
+          {isGroup ? <Users className="h-5 w-5" /> : initials(conv.name ?? otherParticipant?.displayName ?? null)}
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1 border-b border-border/40 py-2.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className={cn("truncate text-[15px]", unread ? "font-bold" : "font-semibold")}>
             {conv.name ?? otherParticipant?.displayName ?? "Chat"}
           </p>
-          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+          <span className={cn("shrink-0 text-[11px]", unread ? "font-semibold text-primary" : "text-muted-foreground")}>
             {timeAgo(conv.lastMessageAt)}
           </span>
         </div>
-        <div className="flex items-center justify-between mt-0.5">
-          <p className={`text-sm truncate ${conv.unreadCount > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className={cn("truncate text-[13px]", unread ? "font-medium text-foreground" : "text-muted-foreground")}>
             {conv.lastMessagePreview || "No messages yet"}
           </p>
-          {conv.unreadCount > 0 && (
-            <Badge className="ml-2 bg-primary text-primary-foreground h-5 min-w-[20px] flex items-center justify-center text-xs rounded-full">
+          {unread && (
+            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
               {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
-            </Badge>
+            </span>
           )}
         </div>
       </div>

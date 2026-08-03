@@ -179,8 +179,8 @@ export default function Dashboard() {
                 setOpen(true);
               }}
               onFocus={() => setOpen(true)}
-              placeholder="Search members, news, events, exams…"
-              className="pl-10 pr-10 rounded-2xl bg-card shadow-card border-border/70"
+              placeholder="Search people, news, events…"
+              className="h-11 rounded-full border-0 bg-muted/70 pl-10 pr-10 shadow-none"
               autoComplete="off"
               inputMode="search"
             />
@@ -273,11 +273,11 @@ export default function Dashboard() {
 
           {/* ── 1. Emergency Alert Banner ── */}
           {emergencyLoading ? (
-            <div className="rounded-2xl border bg-card p-4 space-y-2">
-              <Skeleton className="h-4 w-24 rounded-full" />
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-9 w-40 mt-2 rounded-full" />
+            <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 overflow-hidden">
+              <Skeleton className="h-5 w-28 rounded-full" />
+              <Skeleton className="h-6 w-full rounded-xl" />
+              <Skeleton className="h-4 w-3/4 rounded-lg" />
+              <Skeleton className="h-10 w-36 mt-1 rounded-2xl" />
             </div>
           ) : latestEmergency ? (
             <div
@@ -402,17 +402,19 @@ export default function Dashboard() {
                 View All <ChevronRight className="h-3.5 w-3.5" />
               </Link>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {SERVICE_GRID_ITEMS.map((s) => (
+            <div className="grid grid-cols-4 gap-2">
+              {SERVICE_GRID_ITEMS.slice(0, 8).map((s) => (
                 <Link
                   key={s.to}
                   to={s.to}
-                  className="flex flex-col items-center gap-2 py-3 rounded-2xl border border-border/60 bg-card hover:bg-muted/40 transition-colors"
+                  className="flex flex-col items-center gap-1.5 py-2 transition-opacity active:opacity-70"
                 >
-                  <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", s.color)}>
+                  <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", s.color)}>
                     <s.icon className="h-5 w-5" />
                   </div>
-                  <span className="text-xs font-medium text-foreground/80">{s.label}</span>
+                  <span className="max-w-full truncate text-center text-[10px] font-medium text-foreground/80">
+                    {s.label}
+                  </span>
                 </Link>
               ))}
             </div>
@@ -558,10 +560,10 @@ export default function Dashboard() {
 
           {/* Emergency Alert */}
           {emergencyLoading ? (
-            <div className="rounded-2xl border bg-card p-5 space-y-3">
+            <div className="rounded-2xl border border-border/60 bg-card p-5 space-y-3 overflow-hidden">
               <Skeleton className="h-5 w-32 rounded-full" />
-              <Skeleton className="h-7 w-2/3" />
-              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-7 w-2/3 rounded-xl" />
+              <Skeleton className="h-4 w-1/2 rounded-lg" />
             </div>
           ) : latestEmergency ? (
             <div

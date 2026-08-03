@@ -11,16 +11,22 @@ import {
 import { Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { userApi } from "@/lib/api";
-import { ImageUrlWithUpload } from "@/components/ImageUrlWithUpload";
+import { ImageUploadField } from "@/components/ImageUploadField";
 
 interface ChangeBackgroundDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentUrl?: string | null;
-  onUpdated?: () => void;
+  /** Called after a successful save with the new cover URL (or null if removed). */
+  onUpdated?: (nextUrl: string | null) => void;
 }
 
-export function ChangeBackgroundDialog({ open, onOpenChange, currentUrl, onUpdated }: ChangeBackgroundDialogProps) {
+export function ChangeBackgroundDialog({
+  open,
+  onOpenChange,
+  currentUrl,
+  onUpdated,
+}: ChangeBackgroundDialogProps) {
   const [url, setUrl] = useState(currentUrl || "");
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -32,14 +38,15 @@ export function ChangeBackgroundDialog({ open, onOpenChange, currentUrl, onUpdat
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await userApi.updateProfile({ coverImageUrl: url.trim() || null });
-      toast({ title: "Background Updated", description: "Your cover image has been updated." });
+      const next = url.trim() || null;
+      await userApi.updateProfile({ coverImageUrl: next });
+      toast({ title: "Cover updated", description: "Your cover photo has been saved." });
+      onUpdated?.(next);
       onOpenChange(false);
-      onUpdated?.();
     } catch (err) {
       toast({
         title: "Error",
-        description: err instanceof Error ? err.message : "Failed to update background",
+        description: err instanceof Error ? err.message : "Failed to update cover",
         variant: "destructive",
       });
     } finally {
@@ -53,28 +60,26 @@ export function ChangeBackgroundDialog({ open, onOpenChange, currentUrl, onUpdat
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-primary" />
-            Change Background Image
+            Cover photo
           </DialogTitle>
-          <DialogDescription>Paste an image URL or upload a file. The URL is saved to your profile.</DialogDescription>
+          <DialogDescription>Upload a wide photo for your profile cover.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <ImageUrlWithUpload
-            id="cover-url"
-            label="Cover image"
-            optional
+        <div className="py-1">
+          <ImageUploadField
             value={url}
             onChange={setUrl}
             folder="background"
             auth="user"
-            helperText="Uses the same cloud upload as other images (Cloudinary when configured)."
+            variant="cover"
+            label="Cover"
           />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
+          <Button onClick={() => void handleSubmit()} disabled={saving || url === (currentUrl || "")}>
+            {saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

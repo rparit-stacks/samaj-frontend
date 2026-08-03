@@ -34,7 +34,7 @@ import { ChangeBackgroundDialog } from "@/components/dialogs/ChangeBackgroundDia
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useAuth } from "@/context/AuthContext";
 import { userApi, eventsApi, communityApi, emergencyApi, chatApi } from "@/lib/api";
-import type { CommunityPost, CommunityPostMedia, EmergencyItem, EventItem } from "@/lib/api";
+import type { CommunityPost, CommunityPostMedia, EmergencyItem, EventItem, PublicProfileResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function initialsOf(name: string): string {
@@ -71,7 +71,7 @@ export default function MemberDetail() {
     queryKey: ["publicProfile", id],
     queryFn: () => userApi.getPublicProfileByRef(id!),
     enabled: !!id,
-    staleTime: 0,
+    staleTime: 30_000,
   });
 
   const { data: ownerProfile } = useQuery({
@@ -125,6 +125,21 @@ export default function MemberDetail() {
 
   const handleKey = profile?.profileKey ?? id ?? "";
 
+  const patchPublicCover = (nextUrl: string | null) => {
+    queryClient.setQueryData<PublicProfileResponse>(["publicProfile", id], (prev) =>
+      prev ? { ...prev, coverImageUrl: nextUrl } : prev,
+    );
+    queryClient.setQueryData(["profile"], (prev: { coverImageUrl?: string | null } | undefined) =>
+      prev ? { ...prev, coverImageUrl: nextUrl } : prev,
+    );
+  };
+
+  const patchPublicAvatar = (nextUrl: string | null) => {
+    queryClient.setQueryData<PublicProfileResponse>(["publicProfile", id], (prev) =>
+      prev ? { ...prev, avatarUrl: nextUrl } : prev,
+    );
+  };
+
   const startDirectChat = async () => {
     if (!profile?.userId) return;
     setChatLoading(true);
@@ -148,7 +163,9 @@ export default function MemberDetail() {
         await navigator.share({ title: profile?.fullName || "Profile", url: profileUrl });
         return;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     try {
       await navigator.clipboard.writeText(profileUrl);
       toast({ title: "Link copied", description: "Profile link copied to clipboard." });
@@ -165,38 +182,25 @@ export default function MemberDetail() {
     setLightboxOpen(true);
   };
 
-  // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading || !id) {
     return (
       <AppLayout mobileHeader={<></>}>
-        <div className="min-h-screen bg-background">
-          {/* Sticky header skeleton */}
-          <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-            <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-3">
-              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => navigate(-1)}>
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <Skeleton className="h-4 w-32" />
-              <div className="w-10" />
+        <div className="bg-background pb-nav-safe">
+        <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+            <div className="mx-auto flex h-12 max-w-lg items-center justify-between px-3">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-8 w-8 rounded-full" />
             </div>
           </div>
-          <div className="mx-auto max-w-4xl px-3 pt-4 space-y-4">
-            <div className="rounded-2xl border overflow-hidden">
-              <Skeleton className="h-36 w-full" />
-              <div className="p-4 space-y-4">
-                <div className="flex items-center gap-4">
-                  <Skeleton className="h-20 w-20 rounded-full -mt-12" />
-                  <div className="grid flex-1 grid-cols-3 gap-2">
-                    {[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}
-                  </div>
-                </div>
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-64" />
-                <div className="grid grid-cols-2 gap-2">
-                  <Skeleton className="h-9 rounded-xl" />
-                  <Skeleton className="h-9 rounded-xl" />
-                </div>
-              </div>
+          <Skeleton className="h-44 w-full rounded-none" />
+          <div className="mx-auto max-w-lg px-4 -mt-10 space-y-4">
+            <Skeleton className="h-20 w-20 rounded-full border-4 border-background" />
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-56" />
+            <div className="grid grid-cols-2 gap-2">
+              <Skeleton className="h-9 rounded-lg" />
+              <Skeleton className="h-9 rounded-lg" />
             </div>
           </div>
         </div>
@@ -204,20 +208,19 @@ export default function MemberDetail() {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────────────────────
   if (isError || !profile) {
     return (
       <AppLayout mobileHeader={<></>}>
-        <div className="min-h-screen bg-background">
+        <div className="bg-background pb-nav-safe">
           <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-            <div className="mx-auto flex h-14 max-w-4xl items-center px-3">
-              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => navigate(-1)}>
+            <div className="mx-auto flex h-12 max-w-lg items-center px-3">
+              <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate(-1)}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </div>
           </div>
-          <div className="flex flex-col items-center justify-center py-20 px-4 text-center gap-3">
-            <p className="text-destructive font-semibold">
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-20 text-center">
+            <p className="font-semibold text-destructive">
               {error instanceof Error ? error.message : "Profile not found"}
             </p>
             <Button variant="outline" className="rounded-xl" onClick={() => navigate(-1)}>
@@ -231,38 +234,31 @@ export default function MemberDetail() {
 
   const displayName = profile.fullName || "Member";
   const initials = initialsOf(displayName);
+  const coverUrl = profile.coverImageUrl?.trim() || "";
 
   return (
-    // mobileHeader={<></>} suppresses the default MobileHeader so the page's
-    // own sticky header (below) is the single source of the username — no duplication.
     <AppLayout mobileHeader={<></>}>
-      <div className="min-h-screen bg-background">
-
-        {/* ── Sticky top nav ───────────────────────────────────────────────── */}
-        <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-3">
+      <div className="bg-background pb-nav-safe">
+        {/* Top bar — Instagram-style */}
+        <header className="sticky top-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex h-12 max-w-lg items-center justify-between gap-2 px-2">
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-xl shrink-0"
+              className="h-9 w-9 shrink-0 rounded-full"
               onClick={() => navigate(-1)}
               aria-label="Back"
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
 
-            <div className="flex flex-col items-center min-w-0 flex-1 px-2">
-              <p className="font-semibold text-sm truncate leading-tight">
-                {handleKey}
-              </p>
-              {isOwner && (
-                <p className="text-[10px] text-muted-foreground leading-tight">Your profile</p>
-              )}
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate text-sm font-semibold tracking-tight">{handleKey}</p>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex w-9 shrink-0 justify-end">
               {isOwner ? (
-                <Button variant="ghost" size="icon" className="rounded-xl" asChild aria-label="Settings">
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" asChild aria-label="Settings">
                   <Link to="/settings">
                     <Settings className="h-4 w-4" />
                   </Link>
@@ -271,8 +267,8 @@ export default function MemberDetail() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-xl"
-                  aria-label="More options"
+                  className="h-9 w-9 rounded-full"
+                  aria-label="More"
                   onClick={() => {
                     toast({ title: "Report submitted", description: "Thank you. We will review this profile." });
                   }}
@@ -282,171 +278,157 @@ export default function MemberDetail() {
               )}
             </div>
           </div>
-        </div>
+        </header>
 
-        <div className="mx-auto max-w-4xl px-3 pb-10 pt-3 space-y-3">
+        <div className="mx-auto max-w-lg">
+          {/* Full-bleed cover — real <img> so it doesn't vanish via CSS shorthand bugs */}
+          <div className="relative h-40 w-full overflow-hidden bg-muted sm:h-48">
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="eager"
+                decoding="async"
+                onError={(e) => {
+                  // Keep layout stable if CDN flakes — hide broken image, show gradient underneath
+                  (e.currentTarget as HTMLImageElement).style.opacity = "0";
+                }}
+              />
+            ) : null}
+            {!coverUrl && (
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(var(--primary) / 0.35) 0%, hsl(var(--secondary) / 0.25) 50%, hsl(var(--primary) / 0.15) 100%)",
+                }}
+              />
+            )}
+            {isOwner && (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="absolute bottom-3 right-3 h-9 w-9 rounded-full border border-border/40 bg-background/90 shadow-md backdrop-blur"
+                onClick={() => setChangeBgOpen(true)}
+                aria-label="Change cover photo"
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
 
-          {/* ── Profile card ───────────────────────────────────────────────── */}
-          <div className="rounded-2xl border border-border/70 overflow-hidden bg-card shadow-sm">
+          {/* Identity block */}
+          <div className="px-4 pb-3">
+            <div className="flex items-end justify-between gap-3">
+              <div className="relative -mt-12 shrink-0">
+                <Avatar className="h-[88px] w-[88px] border-[3px] border-background shadow-md ring-1 ring-border/60">
+                  <AvatarImage src={profile.avatarUrl ?? undefined} alt={displayName} className="object-cover" />
+                  <AvatarFallback className="bg-primary text-2xl font-semibold text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => setEditProfileOpen(true)}
+                    className="absolute bottom-0.5 right-0.5 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-foreground shadow"
+                    aria-label="Edit profile photo"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
 
-            {/* Cover image */}
-            <div
-              className="relative h-32 md:h-44 bg-cover bg-center"
-              style={{
-                backgroundImage: profile.coverImageUrl
-                  ? `url(${profile.coverImageUrl})`
-                  : undefined,
-                background: profile.coverImageUrl
-                  ? undefined
-                  : "linear-gradient(135deg, hsl(var(--primary)/0.25) 0%, hsl(var(--primary)/0.08) 50%, hsl(var(--primary)/0.15) 100%)",
-              }}
-            >
-              {isOwner && (
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="absolute bottom-2.5 right-2.5 h-8 w-8 rounded-full bg-background/80 hover:bg-background shadow"
-                  onClick={() => setChangeBgOpen(true)}
-                  aria-label="Change cover photo"
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                </Button>
+              {/* Instagram-style compact stats */}
+              <div className="flex flex-1 items-center justify-around pb-1 pt-3">
+                <Stat value={stats.posts} label="posts" />
+                <Stat value={stats.events} label="events" />
+                <Stat value={stats.sos} label="sos" />
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[15px] font-bold leading-tight tracking-tight">{displayName}</h1>
+                {profile.bloodGroup && (
+                  <Badge className="gap-1 border-destructive/20 bg-destructive/10 text-[10px] text-destructive">
+                    <Droplets className="h-2.5 w-2.5" />
+                    {profile.bloodGroup}
+                  </Badge>
+                )}
+              </div>
+
+              {(profile.profession || profile.city) && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  {profile.profession && (
+                    <span className="inline-flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" />
+                      {profile.profession}
+                    </span>
+                  )}
+                  {profile.city && (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {profile.city}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {profile.bio && (
+                <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/90">{profile.bio}</p>
               )}
             </div>
 
-            <div className="px-4 pb-5 pt-3 space-y-4">
-              {/* Avatar + Stats row */}
-              <div className="flex items-start gap-4">
-                <div className="-mt-14 shrink-0">
-                  <Avatar className="h-20 w-20 md:h-24 md:w-24 border-4 border-background shadow-md ring-1 ring-border">
-                    <AvatarImage src={profile.avatarUrl ?? undefined} alt={displayName} />
-                    <AvatarFallback className="bg-primary text-xl font-semibold text-primary-foreground">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
+            {/* Actions */}
+            <div className="mt-3 space-y-2">
+              {isOwner ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="secondary"
+                    className="h-8 rounded-lg text-xs font-semibold"
+                    onClick={() => setEditProfileOpen(true)}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit profile
+                  </Button>
+                  <Button variant="secondary" className="h-8 rounded-lg text-xs font-semibold" onClick={handleShare}>
+                    <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                    Share profile
+                  </Button>
                 </div>
-
-                {/* Stats */}
-                <div className="flex-1 grid grid-cols-3 gap-2 text-center pt-1">
-                  <div className="rounded-xl bg-muted/50 px-2 py-2.5">
-                    <div className="text-lg font-bold leading-none">{stats.posts}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">Posts</div>
-                  </div>
-                  <div className="rounded-xl bg-muted/50 px-2 py-2.5">
-                    <div className="text-lg font-bold leading-none">{stats.events}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">Events</div>
-                  </div>
-                  <div className="rounded-xl bg-muted/50 px-2 py-2.5">
-                    <div className="text-lg font-bold leading-none">{stats.sos}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">SOS</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Name + Username + Bio */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="font-bold text-lg leading-tight">{displayName}</h1>
-                  {profile.bloodGroup && (
-                    <Badge className="border-destructive/20 bg-destructive/10 text-destructive text-[11px] gap-1">
-                      <Droplets className="h-2.5 w-2.5" />
-                      {profile.bloodGroup}
-                    </Badge>
-                  )}
-                </div>
-
-                {/* @handle shown only if different from displayName */}
-                {handleKey && (
-                  <p className="text-sm text-muted-foreground">@{handleKey}</p>
-                )}
-
-                {/* Profession + City */}
-                {(profile.profession || profile.city) && (
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {profile.profession && (
-                      <span className="inline-flex items-center gap-1">
-                        <Briefcase className="h-3 w-3" />
-                        {profile.profession}
-                      </span>
-                    )}
-                    {profile.city && (
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {profile.city}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {profile.bio && (
-                  <p className="text-sm text-foreground/90 whitespace-pre-line leading-relaxed">
-                    {profile.bio}
-                  </p>
-                )}
-              </div>
-
-              {/* Action buttons */}
-              <div className="space-y-2">
-                {isOwner ? (
+              ) : (
+                <>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
-                      variant="outline"
-                      className="h-9 rounded-xl gap-1.5 font-semibold"
-                      onClick={() => setEditProfileOpen(true)}
+                      className="h-8 rounded-lg text-xs font-semibold"
+                      disabled={chatLoading}
+                      onClick={() => void startDirectChat()}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit profile
+                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                      {chatLoading ? "Opening…" : "Message"}
                     </Button>
                     <Button
-                      variant="outline"
-                      className="h-9 rounded-xl gap-1.5 font-semibold"
-                      onClick={handleShare}
+                      variant="secondary"
+                      className="h-8 rounded-lg text-xs font-semibold"
+                      onClick={() => setContactRequestOpen(true)}
                     >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share
+                      <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                      Connect
                     </Button>
                   </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        className="h-9 rounded-xl gap-1.5 font-semibold"
-                        disabled={chatLoading}
-                        onClick={() => void startDirectChat()}
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        {chatLoading ? "Opening…" : "Message"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-9 rounded-xl gap-1.5 font-semibold"
-                        onClick={() => setContactRequestOpen(true)}
-                      >
-                        <UserPlus className="h-3.5 w-3.5" />
-                        Connect
-                      </Button>
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="h-9 w-full rounded-xl gap-1.5 font-semibold"
-                      onClick={handleShare}
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share profile
-                    </Button>
-                  </>
-                )}
-              </div>
+                  <Button variant="outline" className="h-8 w-full rounded-lg text-xs font-semibold" onClick={handleShare}>
+                    <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                    Share profile
+                  </Button>
+                </>
+              )}
 
-              {/* Contact quick actions */}
               {(profile.phone || profile.email) && (
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-2 pt-0.5">
                   {profile.phone && (
-                    <Button
-                      asChild
-                      size="sm"
-                      className="h-8 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                    >
+                    <Button asChild size="sm" className="h-8 gap-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700">
                       <a href={`tel:${profile.phone}`}>
                         <Phone className="h-3.5 w-3.5" />
                         Call
@@ -454,12 +436,7 @@ export default function MemberDetail() {
                     </Button>
                   )}
                   {profile.email && (
-                    <Button
-                      variant="outline"
-                      asChild
-                      size="sm"
-                      className="h-8 rounded-xl gap-1.5"
-                    >
+                    <Button variant="outline" asChild size="sm" className="h-8 gap-1.5 rounded-lg">
                       <a href={`mailto:${profile.email}`}>
                         <Mail className="h-3.5 w-3.5" />
                         Email
@@ -471,40 +448,45 @@ export default function MemberDetail() {
             </div>
           </div>
 
-          {/* ── Content tabs ───────────────────────────────────────────────── */}
+          {/* Tabs — Instagram underline vibe */}
           <Tabs defaultValue="posts" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 rounded-xl bg-muted/50 h-10">
-              <TabsTrigger value="posts" className="gap-1.5 rounded-lg text-xs font-semibold">
-                <Grid3X3 className="h-3.5 w-3.5" />
-                Posts
+            <TabsList className="h-11 w-full justify-stretch rounded-none border-y border-border/60 bg-transparent p-0">
+              <TabsTrigger
+                value="posts"
+                className="h-full flex-1 rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Grid3X3 className="h-4 w-4" />
               </TabsTrigger>
-              <TabsTrigger value="events" className="gap-1.5 rounded-lg text-xs font-semibold">
-                <Calendar className="h-3.5 w-3.5" />
-                Events
+              <TabsTrigger
+                value="events"
+                className="h-full flex-1 rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Calendar className="h-4 w-4" />
               </TabsTrigger>
-              <TabsTrigger value="sos" className="gap-1.5 rounded-lg text-xs font-semibold">
-                <Siren className="h-3.5 w-3.5" />
-                SOS
+              <TabsTrigger
+                value="sos"
+                className="h-full flex-1 rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Siren className="h-4 w-4" />
               </TabsTrigger>
             </TabsList>
 
-            {/* Posts grid */}
-            <TabsContent value="posts" className="mt-2">
+            <TabsContent value="posts" className="mt-0">
               {!profile.showCommunityOnProfile ? (
-                <EmptyTabCard message="Posts hidden by profile privacy settings." />
+                <EmptyTabCard message="Posts hidden by privacy settings." />
               ) : posts.length === 0 ? (
                 <EmptyTabCard
-                  message={isOwner ? "You haven't posted anything yet." : "No posts yet."}
+                  message={isOwner ? "Share your first moment with the community." : "No posts yet."}
                   action={
                     isOwner ? (
-                      <Button variant="outline" size="sm" className="rounded-xl mt-2" asChild>
-                        <Link to="/feeds">Create your first post</Link>
+                      <Button variant="outline" size="sm" className="mt-3 rounded-xl" asChild>
+                        <Link to="/feeds">Create a post</Link>
                       </Button>
                     ) : undefined
                   }
                 />
               ) : (
-                <div className="grid grid-cols-3 gap-0.5 rounded-xl overflow-hidden">
+                <div className="grid grid-cols-3 gap-0.5">
                   {posts.map((post) => {
                     const cover = postCover(post);
                     return (
@@ -512,8 +494,8 @@ export default function MemberDetail() {
                         key={post.id}
                         type="button"
                         className={cn(
-                          "relative aspect-square overflow-hidden bg-muted/40",
-                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          "relative aspect-square overflow-hidden bg-muted/50",
+                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
                           cover && "cursor-zoom-in",
                         )}
                         onClick={() => openPost(post)}
@@ -523,16 +505,16 @@ export default function MemberDetail() {
                           <img
                             src={cover}
                             alt=""
-                            className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 hover:scale-105"
+                            className="absolute inset-0 h-full w-full object-cover"
+                            loading="lazy"
                           />
                         ) : (
-                          <div className="absolute inset-0 flex items-center justify-center p-2 text-center text-[11px] text-muted-foreground leading-snug">
+                          <div className="absolute inset-0 flex items-center justify-center p-2 text-center text-[11px] leading-snug text-muted-foreground">
                             {post.content.slice(0, 50)}
                           </div>
                         )}
-                        {/* Multi-image indicator */}
                         {(post.media ?? []).length > 1 && (
-                          <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] font-semibold flex items-center justify-center">
+                          <span className="absolute right-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-md bg-black/55 px-1 text-[10px] font-semibold text-white">
                             {post.media.length}
                           </span>
                         )}
@@ -543,16 +525,15 @@ export default function MemberDetail() {
               )}
             </TabsContent>
 
-            {/* Events */}
-            <TabsContent value="events" className="mt-2">
+            <TabsContent value="events" className="mt-0 px-3 py-3">
               {!profile.showEventsOnProfile ? (
-                <EmptyTabCard message="Events hidden by profile privacy settings." />
+                <EmptyTabCard message="Events hidden by privacy settings." />
               ) : events.length === 0 ? (
                 <EmptyTabCard
-                  message={isOwner ? "No events created yet." : "No events yet."}
+                  message={isOwner ? "No events yet." : "No events yet."}
                   action={
                     isOwner ? (
-                      <Button variant="outline" size="sm" className="rounded-xl mt-2" asChild>
+                      <Button variant="outline" size="sm" className="mt-3 rounded-xl" asChild>
                         <Link to="/events">Browse events</Link>
                       </Button>
                     ) : undefined
@@ -564,9 +545,9 @@ export default function MemberDetail() {
                     <Link
                       key={ev.id}
                       to={`/events/${ev.id}`}
-                      className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3.5 py-3 hover:bg-muted/30 transition-colors"
+                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3.5 py-3 transition-colors hover:bg-muted/40"
                     >
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                         <Calendar className="h-4 w-4 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -576,17 +557,16 @@ export default function MemberDetail() {
                           {ev.location ? ` • ${ev.location}` : ""}
                         </p>
                       </div>
-                      <ChevronLeft className="h-4 w-4 text-muted-foreground rotate-180 shrink-0" />
+                      <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground" />
                     </Link>
                   ))}
                 </div>
               )}
             </TabsContent>
 
-            {/* SOS / Emergency */}
-            <TabsContent value="sos" className="mt-2">
+            <TabsContent value="sos" className="mt-0 px-3 py-3">
               {!profile.showEmergenciesOnProfile ? (
-                <EmptyTabCard message="SOS posts hidden by profile privacy settings." />
+                <EmptyTabCard message="SOS posts hidden by privacy settings." />
               ) : emergencies.length === 0 ? (
                 <EmptyTabCard message="No SOS posts." />
               ) : (
@@ -595,9 +575,9 @@ export default function MemberDetail() {
                     <Link
                       key={em.id}
                       to={`/emergency/${em.id}`}
-                      className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3.5 py-3 hover:bg-muted/30 transition-colors"
+                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3.5 py-3 transition-colors hover:bg-muted/40"
                     >
-                      <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10">
                         <Siren className="h-4 w-4 text-destructive" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -607,7 +587,7 @@ export default function MemberDetail() {
                           {em.city ? ` • ${em.city}` : ""}
                         </p>
                       </div>
-                      <ChevronLeft className="h-4 w-4 text-muted-foreground rotate-180 shrink-0" />
+                      <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground" />
                     </Link>
                   ))}
                 </div>
@@ -615,13 +595,12 @@ export default function MemberDetail() {
             </TabsContent>
           </Tabs>
 
-          {/* Report button for non-owners */}
           {!isOwner && (
-            <div className="text-center pt-2">
+            <div className="py-4 text-center">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground gap-2 text-xs"
+                className="gap-2 text-xs text-muted-foreground"
                 onClick={() => {
                   toast({ title: "Report submitted", description: "Thank you. We will review this profile." });
                 }}
@@ -634,7 +613,6 @@ export default function MemberDetail() {
         </div>
       </div>
 
-      {/* ── Dialogs ──────────────────────────────────────────────────────────── */}
       {!isOwner && profile && (
         <RequestContactDialog
           open={contactRequestOpen}
@@ -651,18 +629,25 @@ export default function MemberDetail() {
             onOpenChange={setEditProfileOpen}
             profile={ownerProfile ?? null}
             user={me}
-            onProfileUpdated={() => {
-              queryClient.invalidateQueries({ queryKey: ["profile"] });
-              queryClient.invalidateQueries({ queryKey: ["publicProfile", id] });
+            onProfileUpdated={(updated) => {
+              if (updated) {
+                queryClient.setQueryData(["profile"], updated);
+                patchPublicAvatar(updated.avatarUrl ?? null);
+                if (updated.coverImageUrl !== undefined) {
+                  patchPublicCover(updated.coverImageUrl ?? null);
+                }
+              }
+              void queryClient.invalidateQueries({ queryKey: ["publicProfile", id] });
             }}
           />
           <ChangeBackgroundDialog
             open={changeBgOpen}
             onOpenChange={setChangeBgOpen}
             currentUrl={profile.coverImageUrl}
-            onUpdated={() => {
-              queryClient.invalidateQueries({ queryKey: ["profile"] });
-              queryClient.invalidateQueries({ queryKey: ["publicProfile", id] });
+            onUpdated={(nextUrl) => {
+              patchPublicCover(nextUrl);
+              void queryClient.invalidateQueries({ queryKey: ["profile"] });
+              void queryClient.invalidateQueries({ queryKey: ["publicProfile", id] });
             }}
           />
         </>
@@ -678,18 +663,22 @@ export default function MemberDetail() {
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function EmptyTabCard({
-  message,
-  action,
-}: {
-  message: string;
-  action?: ReactNode;
-}) {
+function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-xl border border-border/70 p-8 text-center">
-      <p className="text-sm text-muted-foreground">{message}</p>
+    <div className="min-w-[3.5rem] text-center">
+      <div className="text-base font-bold tabular-nums leading-none">{value}</div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function EmptyTabCard({ message, action }: { message: string; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full border-2 border-foreground/80">
+        <Camera className="h-6 w-6 text-foreground/80" />
+      </div>
+      <p className="text-sm font-medium text-foreground">{message}</p>
       {action}
     </div>
   );

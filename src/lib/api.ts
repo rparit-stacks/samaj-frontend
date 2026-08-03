@@ -1,14 +1,31 @@
 import type { ExamPaperDocument } from "@/types/examPaper";
+import { Capacitor } from "@capacitor/core";
 
 /**
  * API base URL.
  *
- * - Local/dev: set VITE_API_URL (e.g. http://localhost:8080)
+ * - Local/dev: set VITE_API_URL (e.g. http://localhost:9512)
+ * - Android emulator: localhost is rewritten to 10.0.2.2 (host machine)
+ * - Physical device: set VITE_API_URL to http://<LAN-IP>:9512 before build
  * - Vercel/prod: leave VITE_API_URL unset so we use same-origin HTTPS, and proxy to the backend via rewrites.
  */
-const API_BASE =
-  import.meta.env.VITE_API_URL?.trim() ||
-  (typeof window !== "undefined" ? window.location.origin : "");
+function resolveApiBase(): string {
+  const configured = import.meta.env.VITE_API_URL?.trim() || "";
+  const base =
+    configured ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+
+  if (
+    Capacitor.isNativePlatform() &&
+    Capacitor.getPlatform() === "android" &&
+    /^(https?:\/\/)(localhost|127\.0\.0\.1)(:\d+)?/i.test(base)
+  ) {
+    return base.replace(/^(https?:\/\/)(localhost|127\.0\.0\.1)/i, "$110.0.2.2");
+  }
+  return base;
+}
+
+const API_BASE = resolveApiBase();
 
 /**
  * Only rewrite `/admin/*` → `/admin-api/*` when we're using same-origin hosting + proxy rewrites
@@ -436,35 +453,6 @@ export interface InviteAuthResponse {
   expiresIn: number;
   user: { id: string; role: string };
 }
-
-// ── Google Sign-In ────────────────────────────────────────────────────────────
-
-export interface GoogleSignInResult {
-  kind: "login" | "signup";
-  // login
-  accessToken?: string;
-  refreshToken?: string;
-  expiresIn?: number;
-  user?: UserResponse;
-  // signup (new user)
-  tempToken?: string;
-  email?: string;
-  name?: string;
-  picture?: string;
-}
-
-export const googleApi = {
-  verifyIdToken: (idToken: string) =>
-    publicFetch<GoogleSignInResult>("/auth/google/id-token", {
-      method: "POST",
-      body: JSON.stringify({ idToken }),
-    }),
-  completeSignup: (body: { tempToken: string; name: string; phone?: string }) =>
-    publicFetch<AuthResponse>("/auth/google/complete", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-};
 
 export const adminInvitationApi = {
   getDetails: (token: string) =>
@@ -1944,6 +1932,34 @@ export interface LoginChallenge {
   type: string; // "EMAIL" | "PHONE"
   message?: string;
 }
+
+/** Returned by POST /auth/google/id-token — either a live session (existing user) or a signup temp token (new user). */
+export interface GoogleSignInResult {
+  kind: "login" | "signup";
+  // login
+  accessToken?: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  user?: UserResponse;
+  // signup (new user)
+  tempToken?: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+}
+
+export const googleApi = {
+  verifyIdToken: (idToken: string) =>
+    publicFetch<GoogleSignInResult>("/auth/google/id-token", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    }),
+  completeSignup: (body: { tempToken: string; name: string; phone?: string }) =>
+    publicFetch<AuthResponse>("/auth/google/complete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
 
 // User Service types
 export interface UserProfile {

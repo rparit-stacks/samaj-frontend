@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -387,6 +387,59 @@
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   }
 
+  /* Safe-area utilities (notch / gesture bar / status bar) */
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /*
+   * Native Android (SDK 35 edge-to-edge fallback):
+   * When status bar still overlays the WebView, keep a cream inset so
+   * page content never sits under system icons. When opt-out works and
+   * WebView is already below the bar, height collapses to 0.
+   */
+  html.capacitor-native .native-status-inset {
+    flex-shrink: 0;
+    height: env(safe-area-inset-top, 0px);
+    min-height: 0;
+    background: #fbf9f8;
+  }
+
+  /* Prefer inset from CSS env; if WebView reports 0 but still overlays, use 28px fallback via data attr */
+  html.capacitor-native[data-force-sat="1"] .native-status-inset {
+    height: max(env(safe-area-inset-top, 0px), 28px);
+  }
+
+  html.capacitor-native[data-force-sat="1"] .pt-safe-top {
+    padding-top: max(env(safe-area-inset-top, 0px), 28px);
+  }
+
+  /* Raw inset only — do not pair with px-* on the same element, the flat padding wins and zeroes it out. */
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Base horizontal padding PLUS the device safe-area inset, additive via calc() so it's safe to combine with layout padding. */
+  .px-safe-6 {
+    padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
+  }
+
+  .px-safe-5 {
+    padding-left: calc(1.25rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1.25rem + env(safe-area-inset-right, 0px));
+  }
+
+  .px-safe-4 {
+    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+  }
+
   /* Ensure 100dvh is supported; fall back to 100vh for older WebViews */
   .h-dvh {
     height: 100dvh;
@@ -394,5 +447,68 @@
 
   .min-h-dvh {
     min-height: 100dvh;
+  }
+
+  /* Auth display font (headlines only) */
+  .font-display {
+    font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  }
+
+  /* Soft brand atmosphere for auth screens */
+  .auth-atmosphere {
+    background:
+      radial-gradient(ellipse 120% 80% at 100% -10%, hsl(345 65% 30% / 0.08), transparent 55%),
+      radial-gradient(ellipse 90% 60% at -10% 40%, hsl(35 85% 55% / 0.10), transparent 50%),
+      linear-gradient(180deg, hsl(30 25% 98%) 0%, hsl(30 20% 95%) 55%, hsl(345 30% 96%) 100%);
+  }
+
+  .dark .auth-atmosphere {
+    background:
+      radial-gradient(ellipse 120% 80% at 100% -10%, hsl(345 55% 50% / 0.12), transparent 55%),
+      radial-gradient(ellipse 90% 60% at -10% 40%, hsl(35 80% 50% / 0.08), transparent 50%),
+      linear-gradient(180deg, hsl(20 20% 8%) 0%, hsl(20 18% 10%) 100%);
+  }
+
+  /* Fake Android status bar (web/dev preview only) */
+  .auth-status-bar {
+    background: hsl(var(--background) / 0.65);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+  }
+
+  /* Auth step transitions */
+  .auth-slide-forward {
+    animation: authSlideForward 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .auth-slide-back {
+    animation: authSlideBack 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes authSlideForward {
+    from {
+      opacity: 0;
+      transform: translateX(28px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes authSlideBack {
+    from {
+      opacity: 0;
+      transform: translateX(-28px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Larger tap targets on auth CTAs */
+  .auth-cta {
+    min-height: 56px;
   }
 }

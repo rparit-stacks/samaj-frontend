@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Heart,
   MessageCircle,
@@ -16,10 +14,7 @@ import {
   Bookmark,
   Plus,
   MapPin,
-  Smile,
-  Tag,
   ChevronDown,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -33,33 +28,29 @@ import { ShareDialog } from "@/components/dialogs/ShareDialog";
 import { ReportContentDialog } from "@/components/dialogs/ReportContentDialog";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useToast } from "@/hooks/use-toast";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   communityApi,
   userApi,
   type CommunityPost,
   type CommunityComment,
   type CommunityTagWithCount,
-  type CommunityAnalytics,
   type UserProfile,
 } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  if (days < 7) return `${days}d`;
+  return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-
-// ── PostCard ───────────────────────────────────────────────────────────────────
 
 function PostCard({
   post,
@@ -105,13 +96,17 @@ function PostCard({
   const myAvatar = profile?.avatarUrl ?? undefined;
 
   const authorName =
-    post.authorUserId === user?.id
-      ? myName
-      : post.authorDisplayName || "Member";
+    post.authorUserId === user?.id ? myName : post.authorDisplayName || "Member";
   const authorInitials =
     authorName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "M";
   const authorAvatar =
     post.authorUserId === user?.id ? myAvatar : post.authorPhotoUrl ?? undefined;
+  const authorProfilePath =
+    post.authorUserId === user?.id
+      ? "/profile"
+      : post.authorUserId
+        ? `/user/${post.authorUserId}`
+        : undefined;
 
   const { data: commentsData, refetch: refetchComments } = useQuery({
     queryKey: ["post-comments", post.id],
@@ -154,9 +149,13 @@ function PostCard({
       await communityApi.addComment(post.id, { content: text });
       setCommentText("");
       setCommentCount((c) => c + 1);
-      refetchComments();
-    } catch (err: any) {
-      toast({ title: "Could not add comment", description: err?.message, variant: "destructive" });
+      void refetchComments();
+    } catch (err: unknown) {
+      toast({
+        title: "Could not add comment",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setIsCommentSubmitting(false);
     }
@@ -168,91 +167,80 @@ function PostCard({
   const imageOnlyMedia = mediaItems.filter((m) => m.type === "IMAGE");
 
   return (
-    <article className="bg-card rounded-2xl overflow-hidden border border-border/60 shadow-sm">
+    <article className="border-b border-border/50 bg-background">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        {authorProfilePath ? (
+          <Link to={authorProfilePath} className="shrink-0">
+            <Avatar className="h-9 w-9 ring-1 ring-border/60">
+              {authorAvatar && <AvatarImage src={authorAvatar} alt={authorName} />}
+              <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                {authorInitials}
+              </AvatarFallback>
+            </Avatar>
+          </Link>
+        ) : (
+          <Avatar className="h-9 w-9 shrink-0 ring-1 ring-border/60">
+            {authorAvatar && <AvatarImage src={authorAvatar} alt={authorName} />}
+            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+              {authorInitials}
+            </AvatarFallback>
+          </Avatar>
+        )}
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <Avatar className="h-10 w-10 ring-2 ring-border shrink-0">
-          {authorAvatar && <AvatarImage src={authorAvatar} alt={authorName} />}
-          <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
-            {authorInitials}
-          </AvatarFallback>
-        </Avatar>
-
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate">{authorName}</p>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            {post.location && (
-              <>
-                <MapPin className="h-3 w-3 shrink-0" />
-                <span className="truncate max-w-[120px]">{post.location}</span>
-                <span>·</span>
-              </>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {authorProfilePath ? (
+              <Link to={authorProfilePath} className="truncate text-sm font-semibold hover:opacity-80">
+                {authorName}
+              </Link>
+            ) : (
+              <p className="truncate text-sm font-semibold">{authorName}</p>
             )}
-            <span>{post.createdAt ? timeAgo(post.createdAt) : "Samaj"}</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {post.createdAt ? timeAgo(post.createdAt) : ""}
+            </span>
           </div>
+          {post.location && (
+            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <MapPin className="h-3 w-3 shrink-0 text-primary/70" />
+              <span className="truncate">{post.location}</span>
+            </p>
+          )}
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl shrink-0 text-muted-foreground">
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full text-muted-foreground">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl">
             <DropdownMenuItem className="rounded-lg" onClick={handleSave}>
-              <Bookmark className={cn("h-4 w-4 mr-2", isSaved && "fill-current text-primary")} />
-              {isSaved ? "Remove from saved" : "Save post"}
+              <Bookmark className={cn("mr-2 h-4 w-4", isSaved && "fill-current text-primary")} />
+              {isSaved ? "Unsave" : "Save"}
             </DropdownMenuItem>
             <DropdownMenuItem className="rounded-lg" onClick={onShare}>
-              <Share2 className="h-4 w-4 mr-2" />
-              Share post
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
             </DropdownMenuItem>
             <DropdownMenuItem className="rounded-lg text-destructive focus:text-destructive" onClick={onReport}>
-              <Flag className="h-4 w-4 mr-2" />
+              <Flag className="mr-2 h-4 w-4" />
               Report
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* ── Text content ───────────────────────────────────────────────────── */}
-      {(post.content || post.tags.length > 0 || post.emojiCodes.length > 0) && (
-        <div className="px-4 pb-3 space-y-2">
-          {post.content && (
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
-              {post.content}
-            </p>
-          )}
-          {post.emojiCodes.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-lg">
-              {post.emojiCodes.map((code, idx) => (
-                <span key={`${code}-${idx}`}>{code}</span>
-              ))}
-            </div>
-          )}
-          {post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {post.tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="text-[12px] font-medium text-primary hover:underline cursor-pointer"
-                >
-                  #{tag.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Media ──────────────────────────────────────────────────────────── */}
+      {/* Media first (IG style) */}
       {hasMedia && (
-        <div className="relative bg-black">
+        <div className="relative bg-muted/30">
           {currentMedia.type === "IMAGE" ? (
             <button
               type="button"
-              className="w-full block focus:outline-none"
+              className="block w-full focus:outline-none"
+              onDoubleClick={handleLike}
               onClick={() => {
                 const imgIdx = imageOnlyMedia.findIndex((m) => m.id === currentMedia.id);
                 setLightboxIndex(Math.max(0, imgIdx));
@@ -263,19 +251,18 @@ function PostCard({
                 src={currentMedia.url}
                 alt=""
                 className="w-full object-cover"
-                style={{ maxHeight: 480, minHeight: 200 }}
+                style={{ maxHeight: 560, aspectRatio: mediaItems.length === 1 ? "4 / 5" : "1 / 1" }}
               />
             </button>
           ) : (
             <video
               src={currentMedia.url}
               controls
-              className="w-full object-cover bg-black"
-              style={{ maxHeight: 480, minHeight: 200 }}
+              className="w-full bg-black object-cover"
+              style={{ maxHeight: 560 }}
             />
           )}
 
-          {/* Multi-image navigation dots */}
           {mediaItems.length > 1 && (
             <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-1.5">
               {mediaItems.map((_, i) => (
@@ -284,24 +271,21 @@ function PostCard({
                   type="button"
                   className={cn(
                     "rounded-full transition-all",
-                    i === mediaPage
-                      ? "bg-white w-5 h-1.5"
-                      : "bg-white/50 w-1.5 h-1.5 hover:bg-white/80",
+                    i === mediaPage ? "h-1.5 w-4 bg-white" : "h-1.5 w-1.5 bg-white/55",
                   )}
                   onClick={() => setMediaPage(i)}
-                  aria-label={`Go to image ${i + 1}`}
+                  aria-label={`Go to media ${i + 1}`}
                 />
               ))}
             </div>
           )}
 
-          {/* Left / Right swipe arrows for multi-image */}
           {mediaItems.length > 1 && (
             <>
               {mediaPage > 0 && (
                 <button
                   type="button"
-                  className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70"
+                  className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white"
                   onClick={() => setMediaPage((p) => p - 1)}
                 >
                   <ChevronDown className="h-4 w-4 rotate-90" />
@@ -310,7 +294,7 @@ function PostCard({
               {mediaPage < mediaItems.length - 1 && (
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70"
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white"
                   onClick={() => setMediaPage((p) => p + 1)}
                 >
                   <ChevronDown className="h-4 w-4 -rotate-90" />
@@ -328,78 +312,90 @@ function PostCard({
         initialIndex={lightboxIndex}
       />
 
-      {/* ── Actions ────────────────────────────────────────────────────────── */}
-      <div className="px-3 pt-2 pb-1">
+      {/* Actions */}
+      <div className="px-2 pt-1">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-0.5">
-            {/* Like */}
+          <div className="flex items-center">
             <button
               type="button"
               className={cn(
-                "h-10 w-10 flex items-center justify-center rounded-xl transition-all active:scale-90",
-                isLiked ? "text-red-500" : "text-muted-foreground hover:text-foreground",
+                "flex h-10 w-10 items-center justify-center rounded-full transition-transform active:scale-90",
+                isLiked ? "text-red-500" : "text-foreground",
               )}
               onClick={handleLike}
               aria-label={isLiked ? "Unlike" : "Like"}
             >
               <Heart
                 className={cn(
-                  "h-6 w-6 transition-all duration-200",
+                  "h-[22px] w-[22px] transition-transform",
                   isLiked && "fill-current",
                   heartBurst && "scale-125",
                 )}
               />
             </button>
-
-            {/* Comment */}
             <button
               type="button"
-              className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-foreground"
               onClick={() => {
                 setShowComments(true);
-                setTimeout(() => commentInputRef.current?.focus(), 100);
+                setTimeout(() => commentInputRef.current?.focus(), 80);
               }}
               aria-label="Comment"
             >
-              <MessageCircle className="h-6 w-6" />
+              <MessageCircle className="h-[22px] w-[22px]" />
             </button>
-
-            {/* Share */}
             <button
               type="button"
-              className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-foreground"
               onClick={onShare}
               aria-label="Share"
             >
-              <Share2 className="h-6 w-6" />
+              <Share2 className="h-[22px] w-[22px]" />
             </button>
           </div>
-
-          {/* Bookmark */}
           <button
             type="button"
             className={cn(
-              "h-10 w-10 flex items-center justify-center rounded-xl transition-colors",
-              isSaved ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              "flex h-10 w-10 items-center justify-center rounded-full",
+              isSaved ? "text-primary" : "text-foreground",
             )}
             onClick={handleSave}
-            aria-label={isSaved ? "Remove from saved" : "Save"}
+            aria-label={isSaved ? "Unsave" : "Save"}
           >
-            <Bookmark className={cn("h-6 w-6 transition-all", isSaved && "fill-current")} />
+            <Bookmark className={cn("h-[22px] w-[22px]", isSaved && "fill-current")} />
           </button>
         </div>
 
-        {/* Like / comment counts */}
-        <div className="px-1 pb-1 text-[13px]">
+        <div className="space-y-1 px-2 pb-3">
           {likes > 0 && (
-            <p className="font-semibold">
+            <p className="text-[13px] font-semibold">
               {likes.toLocaleString()} {likes === 1 ? "like" : "likes"}
             </p>
           )}
+
+          {(post.content?.trim() || post.tags.length > 0 || post.emojiCodes.length > 0) && (
+            <div className="text-[13px] leading-snug">
+              {post.content?.trim() && (
+                <p className="whitespace-pre-wrap">
+                  <span className="font-semibold">{authorName}</span>{" "}
+                  <span className="text-foreground/90">{post.content.trim()}</span>
+                </p>
+              )}
+              {post.emojiCodes.length > 0 && (
+                <p className="mt-0.5 text-base">{post.emojiCodes.join(" ")}</p>
+              )}
+              {post.tags.length > 0 && (
+                <p className="mt-0.5 text-primary">
+                  {post.tags.map((t) => `#${t.name}`).join(" ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {commentCount > 0 && !showComments && (
             <button
               type="button"
-              className="text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+              className="text-[13px] text-muted-foreground"
               onClick={() => setShowComments(true)}
             >
               View all {commentCount} {commentCount === 1 ? "comment" : "comments"}
@@ -408,40 +404,40 @@ function PostCard({
         </div>
       </div>
 
-      {/* ── Comments ───────────────────────────────────────────────────────── */}
       {showComments && (
-        <div className="px-4 pb-3 space-y-3 border-t border-border/50 pt-3">
+        <div className="space-y-3 border-t border-border/40 px-3 py-3">
           {comments.length > 0 && (
-            <div className="space-y-2.5 max-h-52 overflow-y-auto">
+            <div className="max-h-48 space-y-2.5 overflow-y-auto">
               {comments.map((c: CommunityComment) => (
                 <div key={c.id} className="flex gap-2.5">
                   <Avatar className="h-7 w-7 shrink-0">
-                    <AvatarFallback className="text-[10px] bg-muted font-semibold">
+                    <AvatarFallback className="bg-muted text-[10px] font-semibold">
                       {c.authorUserId === user?.id
                         ? myInitials
                         : String(c.authorUserId ?? "").slice(0, 2).toUpperCase() || "M"}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 bg-muted/50 rounded-2xl rounded-tl-sm px-3 py-2">
-                    <p className="text-[11px] font-semibold text-foreground/70 leading-none mb-1">
-                      {c.authorUserId === user?.id ? myName : "Member"}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] leading-snug">
+                      <span className="font-semibold">
+                        {c.authorUserId === user?.id ? myName : "Member"}
+                      </span>{" "}
+                      <span className="text-foreground/90">{c.content}</span>
                     </p>
-                    <p className="text-sm break-words leading-snug">{c.content}</p>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Comment input */}
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8 shrink-0">
               {myAvatar && <AvatarImage src={myAvatar} alt={myName} />}
-              <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+              <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
                 {myInitials}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1 flex items-center gap-2 bg-muted/50 rounded-2xl px-3 py-1.5">
+            <div className="flex flex-1 items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5">
               <Input
                 ref={commentInputRef}
                 placeholder="Add a comment…"
@@ -453,19 +449,16 @@ function PostCard({
                     void handleSubmitComment();
                   }
                 }}
-                className="border-0 bg-transparent h-7 p-0 text-sm focus-visible:ring-0 placeholder:text-muted-foreground/60"
+                className="h-7 border-0 bg-transparent p-0 text-sm focus-visible:ring-0"
               />
               <button
                 type="button"
                 className={cn(
-                  "shrink-0 transition-colors",
-                  commentText.trim()
-                    ? "text-primary hover:text-primary/80"
-                    : "text-muted-foreground/40 pointer-events-none",
+                  "shrink-0",
+                  commentText.trim() ? "text-primary" : "pointer-events-none text-muted-foreground/40",
                 )}
                 disabled={!commentText.trim() || isCommentSubmitting}
-                onClick={handleSubmitComment}
-                aria-label="Post comment"
+                onClick={() => void handleSubmitComment()}
               >
                 <Send className="h-4 w-4" />
               </button>
@@ -476,8 +469,6 @@ function PostCard({
     </article>
   );
 }
-
-// ── Feeds page ─────────────────────────────────────────────────────────────────
 
 export default function Feeds() {
   const [createPostOpen, setCreatePostOpen] = useState(false);
@@ -492,7 +483,6 @@ export default function Feeds() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [topTags, setTopTags] = useState<CommunityTagWithCount[]>([]);
-  const [analytics, setAnalytics] = useState<CommunityAnalytics | null>(null);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -525,35 +515,26 @@ export default function Feeds() {
       setHasMore(res.number + 1 < res.totalPages);
       setPosts((prev) => (reset ? res.content : [...prev, ...res.content]));
       setPage(res.number + 1);
-    } catch (err: any) {
-      toast({ title: "Could not load posts", description: err?.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({
+        title: "Could not load posts",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
   };
 
-  const loadSidebarData = async () => {
-    try {
-      const [tags, stats] = await Promise.all([
-        communityApi.getTopTags(15),
-        communityApi.getMyAnalytics(),
-      ]);
-      setTopTags(tags);
-      setAnalytics(stats);
-    } catch { /* non-blocking */ }
-  };
-
   useEffect(() => {
     void loadFeed({ reset: true });
-    void loadSidebarData();
+    void communityApi
+      .getTopTags(15)
+      .then(setTopTags)
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const savedPosts = useMemo(
-    () => posts.filter((p) => p.savedByCurrentUser).slice(0, 5),
-    [posts],
-  );
 
   const handleTagClick = (tag: CommunityTagWithCount) => {
     const next = selectedTag === tag.slug ? null : tag.slug;
@@ -561,266 +542,189 @@ export default function Feeds() {
     void loadFeed({ reset: true, tag: next });
   };
 
+  const stories = useMemo(() => {
+    const seen = new Set<string>();
+    const items: { key: string; name: string; avatar?: string; path?: string }[] = [];
+    for (const post of posts) {
+      const key = post.authorUserId || post.authorDisplayName || String(post.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        key,
+        name: post.authorUserId === user?.id ? meName : post.authorDisplayName || "Member",
+        avatar:
+          post.authorUserId === user?.id ? meAvatar : post.authorPhotoUrl ?? undefined,
+        path:
+          post.authorUserId === user?.id
+            ? "/profile"
+            : post.authorUserId
+              ? `/user/${post.authorUserId}`
+              : undefined,
+      });
+      if (items.length >= 12) break;
+    }
+    return items;
+  }, [posts, user?.id, meName, meAvatar]);
+
   return (
     <AppLayout title="Community">
-      <div className="md:px-6 md:py-6 px-0 py-0">
-        <div className="mx-auto max-w-5xl grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-0 lg:gap-6">
+      <div className="mx-auto max-w-lg bg-background pb-2">
+        {/* Composer chip */}
+        <button
+          type="button"
+          onClick={() => setCreatePostOpen(true)}
+          className="flex w-full items-center gap-3 border-b border-border/50 px-3 py-3 text-left transition-colors hover:bg-muted/30"
+        >
+          <Avatar className="h-10 w-10 shrink-0">
+            {meAvatar && <AvatarImage src={meAvatar} alt={meName} />}
+            <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
+              {meInitials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm text-muted-foreground">
+              What&apos;s new, {meName.split(" ")[0]}?
+            </p>
+          </div>
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-semibold text-primary">
+            <ImageIcon className="h-3.5 w-3.5" />
+            Post
+          </span>
+        </button>
 
-          {/* ── Main feed column ─────────────────────────────────────────── */}
-          <div className="min-w-0">
-
-            {/* Page header — desktop only */}
-            <div className="hidden md:flex items-center justify-between mb-5">
-              <div>
-                <h1 className="text-2xl font-bold">Community</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  See what your community is sharing
-                </p>
-              </div>
-              <Button className="gap-2 rounded-xl" onClick={() => setCreatePostOpen(true)}>
-                <Plus className="h-4 w-4" />
-                New Post
-              </Button>
-            </div>
-
-            {/* ── Create post bar ──────────────────────────────────────────── */}
-            <div
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 cursor-pointer",
-                "bg-card border-b border-border/60 md:rounded-2xl md:border md:border-border/60 md:mb-4 md:shadow-sm",
-                "hover:bg-muted/30 transition-colors",
-              )}
+        {/* Stories strip */}
+        <div className="flex gap-3 overflow-x-auto border-b border-border/50 px-3 py-3 scrollbar-hide">
+            <button
+              type="button"
               onClick={() => setCreatePostOpen(true)}
+              className="flex w-16 shrink-0 flex-col items-center gap-1.5"
             >
-              <Avatar className="h-10 w-10 shrink-0">
-                {meAvatar && <AvatarImage src={meAvatar} alt={meName} />}
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
-                  {meInitials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 bg-muted/60 rounded-2xl px-4 py-2.5 text-sm text-muted-foreground">
-                What's on your mind, {meName.split(" ")[0]}?
+              <div className="relative">
+                <Avatar className="h-14 w-14 ring-2 ring-border">
+                  {meAvatar && <AvatarImage src={meAvatar} alt={meName} />}
+                  <AvatarFallback className="bg-primary text-primary-foreground">{meInitials}</AvatarFallback>
+                </Avatar>
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
+                  <Plus className="h-3 w-3" />
+                </span>
               </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="rounded-xl h-9 w-9 shrink-0"
-                onClick={(e) => { e.stopPropagation(); setCreatePostOpen(true); }}
-              >
-                <Plus className="h-5 w-5" />
-              </Button>
-            </div>
+              <span className="w-full truncate text-center text-[10px] font-medium">Your story</span>
+            </button>
+            {stories.map((s) => {
+              const inner = (
+                <>
+                  <div className="rounded-full bg-gradient-to-tr from-primary via-secondary to-primary p-[2px]">
+                    <Avatar className="h-14 w-14 border-2 border-background">
+                      {s.avatar && <AvatarImage src={s.avatar} alt={s.name} />}
+                      <AvatarFallback className="bg-muted text-xs font-semibold">
+                        {s.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  <span className="w-full truncate text-center text-[10px] font-medium">
+                    {s.name.split(" ")[0]}
+                  </span>
+                </>
+              );
+              return s.path ? (
+                <Link key={s.key} to={s.path} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
+                  {inner}
+                </Link>
+              ) : (
+                <div key={s.key} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
+                  {inner}
+                </div>
+              );
+            })}
+          </div>
 
-            {/* Quick action row */}
-            <div
+        {/* Tags */}
+        {topTags.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto px-3 py-2.5 scrollbar-hide">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTag(null);
+                void loadFeed({ reset: true, tag: null });
+              }}
               className={cn(
-                "flex items-center gap-0 border-b border-border/60 bg-card",
-                "md:hidden",
+                "h-8 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors",
+                selectedTag == null
+                  ? "bg-foreground text-background"
+                  : "bg-muted/70 text-muted-foreground hover:text-foreground",
               )}
             >
-              {[
-                { icon: <ImageIcon className="h-4 w-4 text-green-600" />, label: "Photo" },
-                { icon: <Tag className="h-4 w-4 text-blue-500" />, label: "Tag" },
-                { icon: <MapPin className="h-4 w-4 text-red-500" />, label: "Location" },
-                { icon: <Smile className="h-4 w-4 text-amber-500" />, label: "Feeling" },
-              ].map(({ icon, label }) => (
+              For you
+            </button>
+            {topTags.slice(0, 12).map((tag) => {
+              const active = selectedTag === tag.slug;
+              return (
                 <button
-                  key={label}
+                  key={tag.id}
                   type="button"
-                  className="flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
-                  onClick={() => setCreatePostOpen(true)}
-                >
-                  {icon}
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* ── Tag filter bar ────────────────────────────────────────────── */}
-            {topTags.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide px-4 py-3 md:px-0 md:mb-2">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedTag(null); void loadFeed({ reset: true, tag: null }); }}
+                  onClick={() => handleTagClick(tag)}
                   className={cn(
-                    "flex-shrink-0 h-8 px-4 rounded-full text-xs font-semibold transition-all border",
-                    selectedTag == null
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-card border-border/70 text-muted-foreground hover:text-foreground",
+                    "h-8 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors",
+                    active
+                      ? "bg-foreground text-background"
+                      : "bg-muted/70 text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  For you
+                  #{tag.name}
                 </button>
-                {topTags.slice(0, 12).map((tag) => {
-                  const active = selectedTag === tag.slug;
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => handleTagClick(tag)}
-                      className={cn(
-                        "flex-shrink-0 h-8 px-4 rounded-full text-xs font-semibold transition-all border",
-                        active
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-card border-border/70 text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      #{tag.name}
-                    </button>
-                  );
-                })}
+              );
+            })}
+          </div>
+        )}
+
+        {isLoading ? (
+          <FeedSkeleton />
+        ) : posts.length === 0 ? (
+          <EmptyFeed onCreatePost={() => setCreatePostOpen(true)} />
+        ) : (
+          <div>
+            {posts.map((post) => (
+              <div key={post.id} id={`post-${post.id}`}>
+                <PostCard
+                  post={post}
+                  onLike={() =>
+                    communityApi.toggleLike(post.id).then((u) => {
+                      setPosts((prev) => prev.map((p) => (p.id === post.id ? u : p)));
+                    })
+                  }
+                  onSave={() =>
+                    communityApi.toggleSave(post.id).then((u) => {
+                      setPosts((prev) => prev.map((p) => (p.id === post.id ? u : p)));
+                    })
+                  }
+                  onShare={() => {
+                    setSelectedPostId(post.id);
+                    setShareDialogOpen(true);
+                  }}
+                  onReport={() => {
+                    setSelectedPostId(post.id);
+                    setReportDialogOpen(true);
+                  }}
+                />
               </div>
-            )}
+            ))}
 
-            {/* ── Posts ─────────────────────────────────────────────────────── */}
-            {isLoading ? (
-              <PostsFeedSkeleton />
-            ) : posts.length === 0 ? (
-              <EmptyFeed onCreatePost={() => setCreatePostOpen(true)} />
-            ) : (
-              <div className="space-y-3 px-3 md:px-0 pb-6 pt-1">
-                {posts.map((post) => (
-                  <div key={post.id} id={`post-${post.id}`}>
-                    <PostCard
-                      post={post}
-                      onLike={() => communityApi.toggleLike(post.id).then((u) => {
-                        setPosts((prev) => prev.map((p) => (p.id === post.id ? u : p)));
-                      })}
-                      onSave={() => communityApi.toggleSave(post.id).then((u) => {
-                        setPosts((prev) => prev.map((p) => (p.id === post.id ? u : p)));
-                      })}
-                      onShare={() => { setSelectedPostId(post.id); setShareDialogOpen(true); }}
-                      onReport={() => { setSelectedPostId(post.id); setReportDialogOpen(true); }}
-                    />
-                  </div>
-                ))}
-
-                {hasMore && (
-                  <div className="text-center pt-2">
-                    <Button
-                      variant="outline"
-                      className="rounded-xl w-full md:w-auto"
-                      onClick={() => void loadFeed()}
-                      disabled={isLoadingMore}
-                    >
-                      {isLoadingMore ? "Loading…" : "Load more posts"}
-                    </Button>
-                  </div>
-                )}
+            {hasMore && (
+              <div className="px-4 py-5 text-center">
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full"
+                  onClick={() => void loadFeed()}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? "Loading…" : "Load more"}
+                </Button>
               </div>
             )}
           </div>
-
-          {/* ── Right sidebar ────────────────────────────────────────────── */}
-          <aside className="hidden lg:block">
-            <div className="space-y-4 sticky top-20">
-
-              {/* Trending tags */}
-              <div className="bg-card rounded-2xl border border-border/60 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-semibold text-sm">Trending</h2>
-                  {selectedTag && (
-                    <button
-                      type="button"
-                      className="text-xs text-primary hover:underline"
-                      onClick={() => { setSelectedTag(null); void loadFeed({ reset: true, tag: null }); }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                {topTags.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No tags yet.</p>
-                ) : (
-                  <ScrollArea className="h-36">
-                    <div className="flex flex-wrap gap-1.5 pr-2">
-                      {topTags.map((tag) => {
-                        const active = selectedTag === tag.slug;
-                        return (
-                          <button
-                            key={tag.id}
-                            type="button"
-                            onClick={() => handleTagClick(tag)}
-                            className={cn(
-                              "h-7 px-3 rounded-full text-xs font-medium border transition-all",
-                              active
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-muted/50 border-border/50 text-muted-foreground hover:text-foreground hover:border-border",
-                            )}
-                          >
-                            #{tag.name}
-                            <span className="ml-1 opacity-60">{tag.postCount}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                )}
-              </div>
-
-              {/* Saved posts */}
-              {savedPosts.length > 0 && (
-                <div className="bg-card rounded-2xl border border-border/60 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-semibold text-sm">Saved</h2>
-                    <Badge variant="secondary" className="text-[10px] rounded-full">
-                      {savedPosts.length}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {savedPosts.map((post) => (
-                      <button
-                        key={post.id}
-                        type="button"
-                        className="w-full text-left text-xs rounded-xl px-3 py-2 bg-muted/40 hover:bg-muted transition-colors"
-                        onClick={() => {
-                          document.getElementById(`post-${post.id}`)
-                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }}
-                      >
-                        <p className="line-clamp-2 text-foreground/80">{post.content}</p>
-                        {post.tags.length > 0 && (
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            {post.tags.slice(0, 2).map((t) => `#${t.name}`).join(" ")}
-                          </p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Analytics */}
-              <div className="bg-card rounded-2xl border border-border/60 p-4">
-                <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  Your impact
-                </h2>
-                {analytics ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: "Posts", value: analytics.totalPosts },
-                      { label: "Likes got", value: analytics.totalLikesReceived },
-                      { label: "Likes given", value: analytics.totalLikesGiven },
-                      { label: "Saved", value: analytics.totalSaves },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="rounded-xl bg-muted/50 px-3 py-2.5 text-center">
-                        <p className="text-lg font-bold leading-none">{value}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">{label}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Start posting to see your stats.</p>
-                )}
-              </div>
-            </div>
-          </aside>
-        </div>
+        )}
       </div>
 
-      {/* ── Dialogs ─────────────────────────────────────────────────────────── */}
       <CreatePostDialog
         open={createPostOpen}
         onOpenChange={setCreatePostOpen}
@@ -833,7 +737,11 @@ export default function Feeds() {
         url={`${window.location.origin}/posts/${selectedPostId ?? ""}`}
         onCopy={async () => {
           if (selectedPostId != null) {
-            try { await communityApi.trackShare(selectedPostId); } catch { /* ignore */ }
+            try {
+              await communityApi.trackShare(selectedPostId);
+            } catch {
+              /* ignore */
+            }
           }
         }}
       />
@@ -847,29 +755,22 @@ export default function Feeds() {
   );
 }
 
-// ── Skeletons & empty states ───────────────────────────────────────────────────
-
-function PostsFeedSkeleton() {
+function FeedSkeleton() {
   return (
-    <div className="space-y-3 px-3 md:px-0 pt-1">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="bg-card rounded-2xl border border-border/60 overflow-hidden">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="h-10 w-10 rounded-full bg-muted animate-pulse shrink-0" />
-            <div className="space-y-1.5 flex-1">
-              <div className="h-3 w-28 rounded-full bg-muted animate-pulse" />
-              <div className="h-2.5 w-20 rounded-full bg-muted animate-pulse" />
+    <div>
+      {[0, 1].map((i) => (
+        <div key={i} className="border-b border-border/50">
+          <div className="flex items-center gap-3 px-3 py-3">
+            <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
+              <div className="h-2.5 w-20 animate-pulse rounded-full bg-muted" />
             </div>
           </div>
-          <div className="px-4 pb-3 space-y-2">
-            <div className="h-3 w-full rounded-full bg-muted animate-pulse" />
-            <div className="h-3 w-4/5 rounded-full bg-muted animate-pulse" />
-          </div>
-          <div className="h-48 bg-muted animate-pulse" />
-          <div className="px-4 py-3 flex gap-3">
-            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+          <div className="aspect-[4/5] animate-pulse bg-muted" />
+          <div className="space-y-2 px-4 py-3">
+            <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
+            <div className="h-3 w-full animate-pulse rounded-full bg-muted" />
           </div>
         </div>
       ))}
@@ -879,19 +780,19 @@ function PostsFeedSkeleton() {
 
 function EmptyFeed({ onCreatePost }: { onCreatePost: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-4">
-      <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center">
-        <Users className="h-8 w-8 text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-foreground">
+        <ImageIcon className="h-7 w-7" />
       </div>
       <div>
-        <p className="font-semibold text-base">Nothing here yet</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Be the first to share something with your community.
+        <p className="text-base font-semibold">Share your first moment</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Photos, updates, and community vibes — Instagram style.
         </p>
       </div>
-      <Button className="rounded-xl gap-2 mt-1" onClick={onCreatePost}>
+      <Button className="gap-2 rounded-full" onClick={onCreatePost}>
         <Plus className="h-4 w-4" />
-        Create first post
+        Create post
       </Button>
     </div>
   );

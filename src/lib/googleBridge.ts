@@ -10,6 +10,40 @@
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
+interface GsiPromptNotification {
+  isNotDisplayed?: () => boolean;
+  isSkippedMoment?: () => boolean;
+  isDismissedMoment?: () => boolean;
+}
+
+interface GoogleAccountsId {
+  initialize: (config: {
+    client_id: string;
+    callback: (response: { credential?: string; error?: string }) => void;
+    auto_select?: boolean;
+    cancel_on_tap_outside?: boolean;
+    use_fedcm_for_prompt?: boolean;
+    ux_mode?: "popup" | "redirect";
+  }) => void;
+  prompt: (momentListener?: (notification: GsiPromptNotification) => void) => void;
+  renderButton: (
+    parent: HTMLElement,
+    options: { type?: string; theme?: string; size?: string; width?: number }
+  ) => void;
+}
+
+interface SamajNativeBridge {
+  startGoogleSignIn?: () => void;
+}
+
+declare global {
+  interface Window {
+    google?: { accounts?: { id?: GoogleAccountsId } };
+    SamajNative?: SamajNativeBridge;
+    __samajGoogleCallback?: ((idToken: string | null, error: string | null) => void) | null;
+  }
+}
+
 /** True when running inside the Samaj Android WebView wrapper. */
 export function isAndroidWebView(): boolean {
   if (typeof window === "undefined") return false;
@@ -19,7 +53,7 @@ export function isAndroidWebView(): boolean {
 
 /** True when Google Identity Services is available (web only). */
 function isGsiLoaded(): boolean {
-  return typeof window !== "undefined" && typeof (window as any).google?.accounts?.id !== "undefined";
+  return typeof window !== "undefined" && typeof window.google?.accounts?.id !== "undefined";
 }
 
 let gsiLoadPromise: Promise<void> | null = null;
@@ -62,14 +96,14 @@ export async function startGoogleSignIn(
 }
 
 function startAndroidGoogleSignIn(onToken: SignInCallback, onError: ErrorCallback): void {
-  const native = (window as any).SamajNative;
+  const native = window.SamajNative;
   if (!native?.startGoogleSignIn) {
     onError("Google Sign-In is not available on this device");
     return;
   }
   // Register one-shot callback that Android will invoke with the result
-  (window as any).__samajGoogleCallback = (idToken: string | null, error: string | null) => {
-    (window as any).__samajGoogleCallback = null;
+  window.__samajGoogleCallback = (idToken: string | null, error: string | null) => {
+    window.__samajGoogleCallback = null;
     if (idToken) {
       onToken(idToken);
     } else {
@@ -90,7 +124,11 @@ async function startWebGoogleSignIn(onToken: SignInCallback, onError: ErrorCallb
     onError("Could not load Google Sign-In. Check your connection.");
     return;
   }
-  const google = (window as any).google;
+  const google = window.google;
+  if (!google?.accounts?.id) {
+    onError("Google Sign-In is not available");
+    return;
+  }
   let settled = false;
   const fire = (idToken: string) => {
     if (settled) return;
@@ -118,14 +156,7 @@ async function startWebGoogleSignIn(onToken: SignInCallback, onError: ErrorCallb
     ux_mode: "popup",
   });
 
-  google.accounts.id.prompt((notification: {
-    isNotDisplayed: () => boolean;
-    isSkippedMoment: () => boolean;
-    isDismissedMoment?: () => boolean;
-    getNotDisplayedReason?: () => string;
-    getSkippedReason?: () => string;
-    getDismissedReason?: () => string;
-  }) => {
+  google.accounts.id.prompt((notification: GsiPromptNotification) => {
     if (settled) return;
     // One Tap suppressed (cooldown, FedCM disabled, browser policy, etc.) →
     // fall back to a transient sign-in button that triggers the same id_token callback.
@@ -145,7 +176,7 @@ async function startWebGoogleSignIn(onToken: SignInCallback, onError: ErrorCallb
  * `google.accounts.id.initialize` callback above, so we still get a JWT id_token.
  */
 function showGoogleSignInPopup(onToken: SignInCallback, onError: ErrorCallback): void {
-  const google = (window as any).google;
+  const google = window.google;
   if (!google?.accounts?.id?.renderButton) {
     onError("Google Sign-In popup is not available");
     return;

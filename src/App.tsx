@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { AdminProtectedRoute } from "@/components/admin/AdminProtectedRoute";
 import { AdminParentRoute } from "@/components/admin/AdminParentRoute";
 import Index from "./pages/Index";
@@ -100,8 +101,14 @@ import JobEdit from "./pages/JobEdit";
 // Auth Pages
 import UserLogin from "./pages/auth/UserLogin";
 import UserSignup from "./pages/auth/UserSignup";
+import Onboarding from "./pages/auth/Onboarding";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 import AuthCallback from "./pages/auth/AuthCallback";
 import GoogleCompleteProfile from "./pages/auth/GoogleCompleteProfile";
+import Privacy from "./pages/auth/Privacy";
+import Terms from "./pages/auth/Terms";
+import Help from "./pages/auth/Help";
+import DeleteAccount from "./pages/auth/DeleteAccount";
 import MaintenanceMode from "./pages/MaintenanceMode";
 
 const queryClient = new QueryClient();
@@ -167,6 +174,7 @@ const App = () => {
             v7_relativeSplatPath: true,
           }}
         >
+          <DeepLinkHandler />
           <Routes>
             {/* Admin Portal - separate auth (no user AuthProvider mounted) */}
             <Route path="/install" element={<AdminInstall />} />
@@ -213,12 +221,17 @@ const App = () => {
 
             {/* User App (wrapped in user AuthProvider) */}
             <Route element={<UserAuthLayout />}>
-              {/* Public - Login & Signup only */}
+              {/* Public - Auth & onboarding */}
+              <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/login" element={<UserLogin />} />
               <Route path="/signup" element={<UserSignup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              {/* Google Sign-In completion — needs AuthProvider for completeSession() */}
               <Route path="/google-complete" element={<GoogleCompleteProfile />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="/delete-account" element={<DeleteAccount />} />
 
               {/* Protected - requires login */}
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />

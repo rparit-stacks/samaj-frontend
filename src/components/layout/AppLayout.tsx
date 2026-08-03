@@ -22,7 +22,7 @@ export function AppLayout({ children, title, mobileHeader, pullToRefresh }: AppL
   useNotificationSocket(isAuthenticated);
 
   return (
-    <div className="h-dvh flex w-full bg-background">
+    <div className="h-dvh flex w-full bg-background app-shell">
       {/* Desktop Sidebar */}
       <DesktopSidebar 
         collapsed={sidebarCollapsed} 
@@ -31,6 +31,9 @@ export function AppLayout({ children, title, mobileHeader, pullToRefresh }: AppL
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Native top inset — covers pages that blank mobileHeader too */}
+        <div className="native-status-inset md:hidden" aria-hidden />
+
         {/* Mobile Header */}
         {mobileHeader ?? <MobileHeader title={title} />}
         

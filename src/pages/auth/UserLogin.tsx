@@ -1,21 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ArrowLeft, Eye, EyeOff, Mail, Shield, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Mail, Shield, ShieldCheck, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import {
   InputOTP,
   InputOTPGroup,
@@ -24,6 +16,11 @@ import {
 import { cn } from "@/lib/utils";
 import { authApi, googleApi } from "@/lib/api";
 import { startGoogleSignIn } from "@/lib/googleBridge";
+import { AuthShell } from "@/components/auth/AuthShell";
+import { AuthField } from "@/components/auth/AuthField";
+import { GoogleIcon } from "@/components/auth/GoogleIcon";
+
+const ONBOARDING_KEY = "samaj_onboarding_done";
 
 const loginSchema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
@@ -34,10 +31,22 @@ type LoginValues = z.infer<typeof loginSchema>;
 
 export default function UserLogin() {
   const navigate = useNavigate();
-  const { login, loginWithOtp, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, loginWithOtp, completeSession, isAuthenticated, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) navigate("/", { replace: true });
+    if (!authLoading && isAuthenticated) {
+      navigate("/", { replace: true });
+      return;
+    }
+    if (!authLoading && !isAuthenticated) {
+      try {
+        if (localStorage.getItem(ONBOARDING_KEY) !== "1") {
+          navigate("/onboarding", { replace: true });
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
   }, [isAuthenticated, authLoading, navigate]);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -45,13 +54,11 @@ export default function UserLogin() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [shake, setShake] = useState(false);
 
-  // OTP phase state (shown after password is verified and server has sent a code).
   const [otpPhase, setOtpPhase] = useState(false);
-  const [otpIdentifier, setOtpIdentifier] = useState<string>("");
+  const [otpIdentifier, setOtpIdentifier] = useState("");
   const [otp, setOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
 
-  const emailRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
 
   const form = useForm<LoginValues>({
@@ -76,7 +83,6 @@ export default function UserLogin() {
 
   const handleLogin = async (values: LoginValues) => {
     if (otpPhase) {
-      // OTP submission path (when user presses Enter / clicks the primary button)
       await handleVerifyOtp();
       return;
     }
@@ -89,7 +95,6 @@ export default function UserLogin() {
         setOtp("");
         toast.success(result.message || "Verification code sent to your email.");
       } else {
-        // Parent-admin bypass (no OTP).
         toast.success("Welcome back!");
         navigate("/");
       }
@@ -150,9 +155,13 @@ export default function UserLogin() {
       async (idToken) => {
         try {
           const result = await googleApi.verifyIdToken(idToken);
-          if (result.kind === "login" && result.accessToken) {
-            localStorage.setItem("accessToken", result.accessToken);
-            if (result.refreshToken) localStorage.setItem("refreshToken", result.refreshToken);
+          if (result.kind === "login" && result.accessToken && result.refreshToken && result.user) {
+            completeSession({
+              accessToken: result.accessToken,
+              refreshToken: result.refreshToken,
+              expiresIn: result.expiresIn ?? 0,
+              user: result.user,
+            });
             toast.success("Welcome back!");
             navigate("/", { replace: true });
           } else if (result.kind === "signup") {
@@ -182,250 +191,225 @@ export default function UserLogin() {
 
   if (authLoading) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-background">
-        <div className="h-10 w-10 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
+      <AuthShell footer={null}>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 animate-fade-in">
+          <div className="h-14 w-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-md)]">
+            <Shield className="h-7 w-7" strokeWidth={2.2} />
+          </div>
+          <div className="h-1.5 w-24 rounded-full skeleton-shimmer" />
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
-      {/* ── Top bar ── */}
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border/60 pt-safe-top">
-        <div className="mx-auto w-full max-w-md flex items-center gap-2 px-4 h-14">
-          <button
-            type="button"
-            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
-            className="tap-target inline-flex items-center justify-center -ml-2 rounded-xl text-primary hover:bg-primary/10 transition-colors"
-            aria-label="Go back"
+    <AuthShell>
+      <div className="pt-6 animate-slide-up">
+        {/* Brand mark */}
+        <div className="flex justify-center">
+          <div
+            className={cn(
+              "inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-md)]",
+              shake && "animate-vibrate"
+            )}
+            aria-hidden="true"
           >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <span className="text-sm font-bold tracking-[0.18em] text-primary uppercase">
-            Samaj
-          </span>
+            <Shield className="h-7 w-7" strokeWidth={2.2} />
+          </div>
         </div>
-      </header>
 
-      {/* ── Main ── */}
-      <main className="flex-1 w-full">
-        <div className="mx-auto w-full max-w-md px-5 pt-8 pb-8">
-          {/* Shield mark */}
-          <div className="flex justify-center">
+        <div className="text-center mt-5">
+          <p className="text-xs font-bold tracking-[0.22em] uppercase text-primary mb-2">Samaj</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+            {otpPhase ? "Verify it's you" : "Welcome back"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {otpPhase
+              ? `Enter the 6-digit code sent to ${otpIdentifier}`
+              : "Sign in to your Samaj account"}
+          </p>
+        </div>
+
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(handleLogin)}
+            className="mt-8 space-y-4"
+            noValidate
+          >
             <div
               className={cn(
-                "inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-md)]",
-                shake && "animate-vibrate"
+                "space-y-4 transition-all duration-300",
+                otpPhase && "opacity-50 pointer-events-none"
               )}
-              aria-hidden="true"
             >
-              <Shield className="h-7 w-7" strokeWidth={2.2} />
-            </div>
-          </div>
-
-          {/* Heading */}
-          <div className="text-center mt-5">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              {otpPhase ? "Verify It's You" : "Welcome Back"}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {otpPhase
-                ? `Enter the 6-digit code sent to ${otpIdentifier}`
-                : "Sign in to your Samaj account"}
-            </p>
-          </div>
-
-          {/* Form */}
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleLogin)}
-              className="mt-8 space-y-5"
-              noValidate
-            >
-              {/* Email */}
               <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
-                      Email Address
-                    </FormLabel>
-                    <div className="relative">
-                      <FormControl>
-                        <Input
-                          {...field}
-                          ref={(el) => {
-                            emailRef.current = el;
-                            field.ref(el);
-                          }}
-                          type="email"
-                          inputMode="email"
-                          autoComplete="email"
-                          placeholder="you@example.com"
-                          disabled={otpPhase}
-                          className="pr-11 h-12 text-base bg-background transition-shadow focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
-                          enterKeyHint="next"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              passwordRef.current?.focus();
-                            }
-                          }}
-                        />
-                      </FormControl>
-                      <Mail
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-muted-foreground pointer-events-none"
-                        aria-hidden="true"
+                  <FormItem>
+                    <FormControl>
+                      <AuthField
+                        {...field}
+                        label="Email Address"
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        disabled={otpPhase}
+                        leadingIcon={<Mail />}
+                        error={form.formState.errors.email?.message}
+                        enterKeyHint="next"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            passwordRef.current?.focus();
+                          }
+                        }}
                       />
-                    </div>
-                    <FormMessage />
+                    </FormControl>
+                    <FormMessage className="sr-only" />
                   </FormItem>
                 )}
               />
 
-              {/* Password */}
               <FormField
                 control={form.control}
                 name="password"
                 render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/80">
-                      Password
-                    </FormLabel>
-                    <div className="relative">
-                      <FormControl>
-                        <Input
-                          {...field}
-                          ref={(el) => {
-                            passwordRef.current = el;
-                            field.ref(el);
-                          }}
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="current-password"
-                          placeholder="••••••••"
-                          disabled={otpPhase}
-                          className="pr-11 h-12 text-base bg-background transition-shadow focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]"
-                          enterKeyHint="done"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") form.handleSubmit(handleLogin)();
-                          }}
-                        />
-                      </FormControl>
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
+                  <FormItem>
+                    <FormControl>
+                      <AuthField
+                        {...field}
+                        ref={(el) => {
+                          passwordRef.current = el;
+                          field.ref(el);
+                        }}
+                        label="Password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
                         disabled={otpPhase}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-40 tap-target inline-flex items-center justify-center rounded-xl transition-colors"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-[18px] w-[18px]" />
-                        ) : (
-                          <Eye className="h-[18px] w-[18px]" />
-                        )}
-                      </button>
-                    </div>
-                    <FormMessage />
+                        leadingIcon={<Lock />}
+                        error={form.formState.errors.password?.message}
+                        enterKeyHint="done"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") form.handleSubmit(handleLogin)();
+                        }}
+                        trailingIcon={
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            disabled={otpPhase}
+                            className="text-muted-foreground hover:text-foreground disabled:opacity-40 tap-target inline-flex items-center justify-center rounded-xl transition-colors"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-[18px] w-[18px]" />
+                            ) : (
+                              <Eye className="h-[18px] w-[18px]" />
+                            )}
+                          </button>
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage className="sr-only" />
                   </FormItem>
                 )}
               />
+            </div>
 
-              {/* Forgot — hide while in OTP phase */}
-              {!otpPhase && (
-                <div className="flex justify-end -mt-1">
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm font-semibold text-primary hover:underline"
-                  >
-                    Forgot Password?
-                  </Link>
-                </div>
-              )}
-
-              {/* OTP block — shown after password is verified */}
-              {otpPhase && (
-                <div
-                  className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4"
-                  aria-live="polite"
+            {!otpPhase && (
+              <div className="flex justify-end -mt-1">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm font-semibold text-primary hover:underline tap-target inline-flex items-center"
                 >
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
-                    <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/90">
-                      Two-Step Verification
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    Enter the 6-digit code sent to {otpIdentifier}.
-                  </p>
+                  Forgot Password?
+                </Link>
+              </div>
+            )}
 
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <InputOTP
-                      maxLength={6}
-                      value={otp}
-                      onChange={(v) => setOtp(v)}
-                      autoFocus
-                      containerClassName="gap-1.5"
-                    >
-                      <InputOTPGroup className="gap-1.5">
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <InputOTPSlot
-                            key={i}
-                            index={i}
-                            className={cn(
-                              "h-10 w-9 sm:w-10 rounded-md border border-input bg-background text-sm font-semibold",
-                              "first:rounded-md last:rounded-md"
-                            )}
-                          />
-                        ))}
-                      </InputOTPGroup>
-                    </InputOTP>
+            {otpPhase && (
+              <div
+                className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 auth-slide-forward"
+                aria-live="polite"
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                  <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-foreground/90">
+                    Two-Step Verification
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Enter the 6-digit code sent to {otpIdentifier}.
+                </p>
 
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      disabled={otpLoading}
-                      className="text-[11px] font-bold tracking-[0.1em] uppercase text-primary disabled:text-muted-foreground disabled:cursor-not-allowed hover:underline shrink-0"
-                    >
-                      Resend
-                    </button>
-                  </div>
+                <div className="mt-4 flex flex-col items-center gap-3">
+                  <InputOTP
+                    maxLength={6}
+                    value={otp}
+                    onChange={(v) => setOtp(v)}
+                    autoFocus
+                    containerClassName="gap-2"
+                  >
+                    <InputOTPGroup className="gap-2">
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <InputOTPSlot
+                          key={i}
+                          index={i}
+                          className={cn(
+                            "h-12 w-10 sm:w-11 rounded-xl border-0 bg-muted/80 text-base font-semibold",
+                            "first:rounded-xl last:rounded-xl"
+                          )}
+                        />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
 
                   <button
                     type="button"
-                    onClick={handleUseDifferentAccount}
-                    className="mt-3 text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground hover:text-primary"
+                    onClick={handleResendOtp}
+                    disabled={otpLoading}
+                    className="text-[11px] font-bold tracking-[0.1em] uppercase text-primary disabled:text-muted-foreground disabled:cursor-not-allowed hover:underline"
                   >
-                    ← Use a different account
+                    Resend code
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleUseDifferentAccount}
+                  className="mt-4 text-[11px] font-semibold tracking-[0.1em] uppercase text-muted-foreground hover:text-primary"
+                >
+                  ← Use a different account
+                </button>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full h-14 text-base font-semibold rounded-2xl auth-cta mt-2"
+              disabled={isLoading || otpLoading}
+            >
+              {isLoading || otpLoading ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                  {otpPhase ? "Verifying…" : "Signing in…"}
+                </span>
+              ) : otpPhase ? (
+                "Verify & Continue"
+              ) : (
+                "Sign In"
               )}
+            </Button>
+          </form>
+        </Form>
 
-              {/* Primary CTA */}
-              <Button
-                type="submit"
-                className="w-full h-12 text-base font-semibold"
-                disabled={isLoading || otpLoading}
-              >
-                {(isLoading || otpLoading) ? (
-                  <span className="flex items-center gap-2">
-                    <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    {otpPhase ? "Verifying…" : "Signing in…"}
-                  </span>
-                ) : otpPhase ? (
-                  "Verify & Continue"
-                ) : (
-                  "Login"
-                )}
-              </Button>
-            </form>
-          </Form>
-
-          {/* Divider — hide during OTP step */}
-          {!otpPhase && (
-            <div className="relative my-6">
+        {!otpPhase && (
+          <>
+            <div className="relative my-6" aria-hidden="true">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
+                <div className="w-full border-t border-border/60" />
               </div>
               <div className="relative flex justify-center">
                 <span className="bg-background px-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
@@ -433,68 +417,33 @@ export default function UserLogin() {
                 </span>
               </div>
             </div>
-          )}
 
-          {/* Google */}
-          {!otpPhase && (
-          <Button
-            variant="outline"
-            className="w-full h-12 text-base font-medium gap-2"
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={googleLoading || isLoading}
-          >
-            {googleLoading ? (
-              <div className="h-4 w-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-            ) : (
-              <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-            )}
-            {googleLoading ? "Connecting…" : "Continue with Google"}
-          </Button>
-          )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGoogleLogin}
+              disabled={googleLoading || isLoading}
+              className="w-full h-14 rounded-2xl text-base font-semibold gap-2.5 auth-cta"
+            >
+              {googleLoading ? (
+                <div className="h-4 w-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+              ) : (
+                <GoogleIcon className="h-5 w-5 shrink-0" />
+              )}
+              {googleLoading ? "Connecting…" : "Continue with Google"}
+            </Button>
+          </>
+        )}
 
-          {/* Sign up link */}
-          {!otpPhase && (
-            <p className="text-center text-sm text-muted-foreground mt-8">
-              New to Samaj?{" "}
-              <Link to="/signup" className="text-primary font-semibold hover:underline">
-                Create an account
-              </Link>
-            </p>
-          )}
-        </div>
-      </main>
-
-      {/* ── Footer ── */}
-      <footer className="border-t border-border/60 bg-muted/30 pb-safe-bottom">
-        <div className="mx-auto w-full max-w-md px-5 py-5">
-          <p className="text-[11px] font-semibold tracking-[0.1em] uppercase text-primary">
-            © {new Date().getFullYear()} Suryavanshi Samaj. All rights reserved.
+        {!otpPhase && (
+          <p className="text-center text-sm text-muted-foreground mt-8 animate-fade-in">
+            New to Samaj?{" "}
+            <Link to="/signup" className="text-primary font-semibold hover:underline">
+              Create an account
+            </Link>
           </p>
-          <div className="mt-3 flex items-start gap-6 text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground">
-            <Link to="/privacy" className="hover:text-primary leading-tight">
-              Privacy
-              <br />
-              Policy
-            </Link>
-            <Link to="/terms" className="hover:text-primary leading-tight">
-              Terms of
-              <br />
-              Service
-            </Link>
-            <Link to="/help" className="hover:text-primary leading-tight">
-              Help
-              <br />
-              Center
-            </Link>
-          </div>
-        </div>
-      </footer>
-    </div>
+        )}
+      </div>
+    </AuthShell>
   );
 }

@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Dialog, 
@@ -17,7 +16,7 @@ import { User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { userApi } from "@/lib/api";
 import type { UserProfile } from "@/lib/api";
-import { ImageUrlWithUpload } from "@/components/ImageUrlWithUpload";
+import { ImageUploadField } from "@/components/ImageUploadField";
 
 interface UserInfo {
   email?: string | null;
@@ -29,7 +28,7 @@ interface EditProfileDialogProps {
   onOpenChange: (open: boolean) => void;
   profile?: UserProfile | null;
   user?: UserInfo | null;
-  onProfileUpdated?: () => void;
+  onProfileUpdated?: (updated?: UserProfile) => void;
 }
 
 const professions = ["Business", "Doctor", "Engineer", "Teacher", "Government", "Lawyer", "CA/CS", "Other"];
@@ -59,7 +58,7 @@ export function EditProfileDialog({ open, onOpenChange, profile, user, onProfile
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await userApi.updateProfile({
+      const updated = await userApi.updateProfile({
         fullName: name.trim() || "",
         city: city || null,
         profession: profession || null,
@@ -73,7 +72,7 @@ export function EditProfileDialog({ open, onOpenChange, profile, user, onProfile
         title: "Profile Updated",
         description: "Your profile has been updated successfully.",
       });
-      onProfileUpdated?.();
+      onProfileUpdated?.(updated);
       onOpenChange(false);
     } catch (err) {
       toast({
@@ -100,27 +99,14 @@ export function EditProfileDialog({ open, onOpenChange, profile, user, onProfile
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* Avatar preview + URL / upload */}
-          <div className="flex flex-col items-center gap-3">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={avatarUrl ?? undefined} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
-                {name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="w-full max-w-md">
-              <ImageUrlWithUpload
-                id="edit-profile-avatar"
-                label="Profile photo"
-                optional
-                value={avatarUrl ?? ""}
-                onChange={(v) => setAvatarUrl(v.trim() || null)}
-                folder="profile"
-                auth="user"
-                helperText="Upload a new picture or paste a direct image URL."
-              />
-            </div>
-          </div>
+          <ImageUploadField
+            value={avatarUrl ?? ""}
+            onChange={(v) => setAvatarUrl(v.trim() || null)}
+            folder="profile"
+            auth="user"
+            variant="avatar"
+            label="Profile photo"
+          />
 
           {/* Name */}
           <div className="space-y-2">
