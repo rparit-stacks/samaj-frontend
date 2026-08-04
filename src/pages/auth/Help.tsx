@@ -65,6 +65,11 @@ export default function Help() {
             </Link>
           </li>
           <li>
+            <Link to={LEGAL.urls.childSafety} className="text-primary font-medium underline">
+              Child Safety Standards
+            </Link>
+          </li>
+          <li>
             <Link to={LEGAL.urls.deleteAccount} className="text-primary font-medium underline">
               Delete your account
             </Link>

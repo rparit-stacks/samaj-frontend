@@ -27,6 +27,7 @@ const reportReasons = [
   { id: "spam", label: "Spam or misleading" },
   { id: "inappropriate", label: "Inappropriate content" },
   { id: "harassment", label: "Harassment or bullying" },
+  { id: "child_safety", label: "Child sexual abuse / exploitation (CSAM)" },
   { id: "false", label: "False information" },
   { id: "hate", label: "Hate speech" },
   { id: "other", label: "Other" },

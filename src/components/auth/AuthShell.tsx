@@ -25,6 +25,12 @@ function DefaultFooter() {
           <span className="text-border" aria-hidden="true">
             ·
           </span>
+          <Link to="/child-safety" className="hover:text-primary transition-colors">
+            Child safety
+          </Link>
+          <span className="text-border" aria-hidden="true">
+            ·
+          </span>
           <Link to="/delete-account" className="hover:text-primary transition-colors">
             Delete account
           </Link>

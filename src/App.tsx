@@ -108,6 +108,7 @@ import GoogleCompleteProfile from "./pages/auth/GoogleCompleteProfile";
 import Privacy from "./pages/auth/Privacy";
 import Terms from "./pages/auth/Terms";
 import Help from "./pages/auth/Help";
+import ChildSafety from "./pages/auth/ChildSafety";
 import DeleteAccount from "./pages/auth/DeleteAccount";
 import MaintenanceMode from "./pages/MaintenanceMode";
 
@@ -231,6 +232,7 @@ const App = () => {
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/help" element={<Help />} />
+              <Route path="/child-safety" element={<ChildSafety />} />
               <Route path="/delete-account" element={<DeleteAccount />} />
 
               {/* Protected - requires login */}

@@ -1,9 +1,10 @@
 /**
  * Single source of truth for Play Console / legal pages.
  * URLs used in Google Play Console → App content / Data safety:
- *   Privacy Policy:  https://web.suryavanshisamaj.online/privacy
- *   Account deletion: https://web.suryavanshisamaj.online/delete-account
- *   Terms of Service: https://web.suryavanshisamaj.online/terms
+ *   Privacy Policy:       https://web.suryavanshisamaj.online/privacy
+ *   Account deletion:     https://web.suryavanshisamaj.online/delete-account
+ *   Terms of Service:     https://web.suryavanshisamaj.online/terms
+ *   Child Safety (CSAE):  https://web.suryavanshisamaj.online/child-safety
  */
 export const LEGAL = {
   appName: "Samaj",
@@ -11,9 +12,14 @@ export const LEGAL = {
   developerName: "Suryavanshi Samaj",
   packageId: "com.rps.samajapp",
   website: "https://web.suryavanshisamaj.online",
-  lastUpdated: "3 August 2026",
+  lastUpdated: "4 August 2026",
   /** Minimum age — matrimony / community features are adult-oriented */
   minimumAge: 18,
+  /** Designated CSAM / child-safety contact (Play Console Child safety standards) */
+  csamContact: {
+    name: "Child Safety Compliance Contact",
+    email: "shashikantlasar999@gmail.com",
+  },
   support: {
     email: "help@suryavanshisamaj.online",
     phoneDisplay: "+91 91118 11117",
@@ -35,5 +41,6 @@ export const LEGAL = {
     terms: "/terms",
     help: "/help",
     deleteAccount: "/delete-account",
+    childSafety: "/child-safety",
   },
 } as const;

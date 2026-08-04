@@ -517,6 +517,17 @@ export default function Settings() {
                   </span>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => navigate("/child-safety")}
+                >
+                  <span className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Child Safety Standards
+                  </span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </CardContent>
             </Card>
 
