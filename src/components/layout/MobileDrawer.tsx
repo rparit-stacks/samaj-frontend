@@ -129,7 +129,7 @@ export function MobileDrawer() {
 
   return (
     <div className="flex flex-col h-full bg-background max-h-[100dvh]">
-      <div className="sticky top-0 z-10 glass border-b border-border/70 shrink-0">
+      <div className="sticky top-0 z-10 glass border-b border-border/70 shrink-0 pt-safe-top">
         <div className="h-14 px-4 flex items-center justify-between">
           <div className="min-w-0 flex items-center gap-2.5">
             <BrandLogo className="h-9 w-9" rounded="xl" />

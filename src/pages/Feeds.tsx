@@ -569,30 +569,6 @@ export default function Feeds() {
     void loadFeed({ reset: true, tag: next });
   };
 
-  const stories = useMemo(() => {
-    const seen = new Set<string>();
-    const items: { key: string; name: string; avatar?: string; path?: string }[] = [];
-    for (const post of posts) {
-      const key = post.authorUserId || post.authorDisplayName || String(post.id);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      items.push({
-        key,
-        name: post.authorUserId === user?.id ? meName : post.authorDisplayName || "Member",
-        avatar:
-          post.authorUserId === user?.id ? meAvatar : post.authorPhotoUrl ?? undefined,
-        path:
-          post.authorUserId === user?.id
-            ? "/profile"
-            : post.authorUserId
-              ? `/user/${post.authorUserId}`
-              : undefined,
-      });
-      if (items.length >= 12) break;
-    }
-    return items;
-  }, [posts, user?.id, meName, meAvatar]);
-
   return (
     <AppLayout title="Community">
       <div className="mx-auto max-w-lg bg-background pb-2">
@@ -618,52 +594,6 @@ export default function Feeds() {
             Post
           </span>
         </button>
-
-        {/* Stories strip */}
-        <div className="flex gap-3 overflow-x-auto border-b border-border/50 px-3 py-3 scrollbar-hide">
-            <button
-              type="button"
-              onClick={() => setCreatePostOpen(true)}
-              className="flex w-16 shrink-0 flex-col items-center gap-1.5"
-            >
-              <div className="relative">
-                <Avatar className="h-14 w-14 ring-2 ring-border">
-                  {meAvatar && <AvatarImage src={meAvatar} alt={meName} />}
-                  <AvatarFallback className="bg-primary text-primary-foreground">{meInitials}</AvatarFallback>
-                </Avatar>
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
-                  <Plus className="h-3 w-3" />
-                </span>
-              </div>
-              <span className="w-full truncate text-center text-[10px] font-medium">Your story</span>
-            </button>
-            {stories.map((s) => {
-              const inner = (
-                <>
-                  <div className="rounded-full bg-gradient-to-tr from-primary via-secondary to-primary p-[2px]">
-                    <Avatar className="h-14 w-14 border-2 border-background">
-                      {s.avatar && <AvatarImage src={s.avatar} alt={s.name} />}
-                      <AvatarFallback className="bg-muted text-xs font-semibold">
-                        {s.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
-                  <span className="w-full truncate text-center text-[10px] font-medium">
-                    {s.name.split(" ")[0]}
-                  </span>
-                </>
-              );
-              return s.path ? (
-                <Link key={s.key} to={s.path} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-                  {inner}
-                </Link>
-              ) : (
-                <div key={s.key} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-                  {inner}
-                </div>
-              );
-            })}
-          </div>
 
         {/* Tags */}
         {topTags.length > 0 && (

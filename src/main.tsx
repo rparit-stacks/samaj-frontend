@@ -15,11 +15,31 @@ async function applyStatusBar() {
   await StatusBar.setStyle({ style: Style.Light });
 }
 
+function detectForceSafeAreaTop() {
+  // On some Android 15+ WebViews the status bar still overlays content even
+  // after setOverlaysWebView({ overlay: false }) succeeds, but env(safe-area-
+  // inset-top) reports 0 because the WebView never adjusted its own insets.
+  // A 0 inset while the OS status bar is visibly present is exactly that case.
+  const probe = document.createElement("div");
+  probe.style.position = "fixed";
+  probe.style.top = "0";
+  probe.style.height = "env(safe-area-inset-top, 0px)";
+  probe.style.pointerEvents = "none";
+  probe.style.visibility = "hidden";
+  document.body.appendChild(probe);
+  const inset = probe.getBoundingClientRect().height;
+  probe.remove();
+  if (inset <= 0) {
+    document.documentElement.dataset.forceSat = "1";
+  }
+}
+
 async function initNativeShell() {
   if (!Capacitor.isNativePlatform()) return;
 
   document.documentElement.classList.add("capacitor-native");
   document.documentElement.dataset.platform = Capacitor.getPlatform();
+  detectForceSafeAreaTop();
 
   const [{ SplashScreen }, { App: CapApp }, { Keyboard, KeyboardResize }] =
     await Promise.all([

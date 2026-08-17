@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 
 interface NavItem {
   to: string;
@@ -53,6 +54,12 @@ const navItems: NavItem[] = [
 
 export function MobileNav() {
   const location = useLocation();
+  const keyboardInset = useKeyboardInset();
+
+  // Hide the bar entirely while the keyboard is open — a fixed-position bar
+  // combined with a resizing viewport otherwise leaves a stale gap between
+  // where the bar renders and where the reserved content padding expects it.
+  if (keyboardInset > 0) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

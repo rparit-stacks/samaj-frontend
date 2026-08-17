@@ -103,6 +103,18 @@ export default function MemberDetail() {
     enabled: !!profileUserId && !!profile?.showEmergenciesOnProfile,
   });
 
+  const { data: outgoingRequests } = useQuery({
+    queryKey: ["contactRequests", "outgoing"],
+    queryFn: () => userApi.getContactRequestsOutgoing(),
+    enabled: !isOwner,
+  });
+
+  const connectStatus = useMemo(() => {
+    if (!profileUserId || !outgoingRequests) return null;
+    const match = outgoingRequests.find((r) => r.targetUserId === profileUserId);
+    return match?.status ?? null;
+  }, [outgoingRequests, profileUserId]);
+
   const events: EventItem[] = eventsData ?? [];
   const posts: CommunityPost[] = postsData?.content ?? [];
   const emergencies: EmergencyItem[] = emergenciesData ?? [];
@@ -156,6 +168,14 @@ export default function MemberDetail() {
       });
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const goBackOrHome = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
     }
   };
 
@@ -216,7 +236,7 @@ export default function MemberDetail() {
         <div className="bg-background pb-nav-safe">
           <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
             <div className="mx-auto flex h-12 max-w-lg items-center px-3">
-              <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate(-1)}>
+              <Button variant="ghost" size="icon" className="rounded-full" onClick={goBackOrHome}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </div>
@@ -225,7 +245,7 @@ export default function MemberDetail() {
             <p className="font-semibold text-destructive">
               {error instanceof Error ? error.message : "Profile not found"}
             </p>
-            <Button variant="outline" className="rounded-xl" onClick={() => navigate(-1)}>
+            <Button variant="outline" className="rounded-xl" onClick={goBackOrHome}>
               Go back
             </Button>
           </div>
@@ -240,7 +260,7 @@ export default function MemberDetail() {
         <div className="bg-background pb-nav-safe">
           <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
             <div className="mx-auto flex h-12 max-w-lg items-center px-3">
-              <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate(-1)}>
+              <Button variant="ghost" size="icon" className="rounded-full" onClick={goBackOrHome}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </div>
@@ -273,7 +293,7 @@ export default function MemberDetail() {
               variant="ghost"
               size="icon"
               className="h-9 w-9 shrink-0 rounded-full"
-              onClick={() => navigate(-1)}
+              onClick={goBackOrHome}
               aria-label="Back"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -439,10 +459,15 @@ export default function MemberDetail() {
                     <Button
                       variant="secondary"
                       className="h-8 rounded-lg text-xs font-semibold"
+                      disabled={connectStatus === "PENDING" || connectStatus === "APPROVED"}
                       onClick={() => setContactRequestOpen(true)}
                     >
                       <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                      Connect
+                      {connectStatus === "PENDING"
+                        ? "Pending"
+                        : connectStatus === "APPROVED"
+                          ? "Connected"
+                          : "Connect"}
                     </Button>
                   </div>
                   <Button variant="outline" className="h-8 w-full rounded-lg text-xs font-semibold" onClick={handleShare}>
@@ -646,6 +671,7 @@ export default function MemberDetail() {
           onOpenChange={setContactRequestOpen}
           targetUserId={profile.userId}
           targetName={displayName}
+          onSuccess={() => void queryClient.invalidateQueries({ queryKey: ["contactRequests", "outgoing"] })}
         />
       )}
 

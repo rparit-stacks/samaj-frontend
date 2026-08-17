@@ -47,10 +47,19 @@ export function DeepLinkHandler() {
     let removeUrlOpen: (() => void) | undefined;
     let cancelled = false;
 
-    const go = (rawUrl: string) => {
+    const go = (rawUrl: string, { isColdLaunch }: { isColdLaunch: boolean }) => {
       const path = pathFromDeepLink(rawUrl);
       if (!path) return;
-      navigate(path, { replace: true });
+      if (isColdLaunch) {
+        // A cold launch's history stack has exactly one entry. Replacing it
+        // with the deep-link target leaves nothing to navigate back to, so
+        // any later navigate(-1) (or the hardware back button) gets stuck on
+        // this same route. Seed a real home entry first, then push on top.
+        navigate("/", { replace: true });
+        navigate(path);
+      } else {
+        navigate(path);
+      }
     };
 
     void (async () => {
@@ -58,13 +67,13 @@ export function DeepLinkHandler() {
 
       try {
         const launch = await App.getLaunchUrl();
-        if (!cancelled && launch?.url) go(launch.url);
+        if (!cancelled && launch?.url) go(launch.url, { isColdLaunch: true });
       } catch {
         // no launch URL
       }
 
       const handle = await App.addListener("appUrlOpen", ({ url }) => {
-        if (url) go(url);
+        if (url) go(url, { isColdLaunch: false });
       });
       removeUrlOpen = () => {
         void handle.remove();

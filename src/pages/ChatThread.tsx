@@ -21,12 +21,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 import {
   ArrowLeft, Send, Paperclip, Image as ImageIcon, X, FileText,
   Loader2, CheckCheck, Reply, Trash2, Download, MoreVertical, Users, UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 
 function initials(name: string | null) {
   if (!name) return "?";
@@ -78,9 +80,11 @@ export default function ChatThread() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const keyboardInset = useKeyboardInset();
 
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessageItem | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const [uploading, setUploading] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -196,6 +200,7 @@ export default function ChatThread() {
       qc.setQueryData(["chat-messages", conversationId], (old: any) => {
         if (!old) return old;
         const firstPage = old.pages[0];
+        if (firstPage.content.some((m: ChatMessageItem) => m.id === msg.id)) return old;
         return {
           ...old,
           pages: [
@@ -282,7 +287,7 @@ export default function ChatThread() {
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
       {/* Header */}
-      <header className="flex items-center gap-1.5 px-2 sm:px-3 py-2.5 border-b bg-card/90 backdrop-blur-md z-10 shrink-0 shadow-sm shadow-black/5">
+      <header className="flex items-center gap-1.5 px-2 sm:px-3 py-2.5 pt-safe-top border-b bg-card/90 backdrop-blur-md z-10 shrink-0 shadow-sm shadow-black/5">
         <Link
           to="/chat"
           className="p-2.5 rounded-2xl hover:bg-muted active:scale-95 transition shrink-0"
@@ -563,7 +568,7 @@ export default function ChatThread() {
                         <button
                           type="button"
                           className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-none"
-                          onClick={() => window.open(msg.fileUrl!, "_blank")}
+                          onClick={() => setLightboxUrl(msg.fileUrl!)}
                         >
                           <div className="relative border-b border-border/30 bg-black/[0.02] dark:bg-black/20">
                             <img
@@ -727,7 +732,7 @@ export default function ChatThread() {
 
       {/* Input bar — WhatsApp style: one rounded field carrying the attachment
           controls, with the send button as a separate circle beside it. */}
-      <div className="flex items-end gap-1.5 px-2 py-2 bg-transparent shrink-0 pb-safe-bottom">
+      <div className={cn("flex items-end gap-1.5 px-2 py-2 bg-transparent shrink-0", keyboardInset === 0 && "pb-safe-bottom")}>
         <input
           ref={fileInputRef}
           type="file"
@@ -799,6 +804,14 @@ export default function ChatThread() {
           <Send className="h-5 w-5 translate-x-[1px]" />
         </button>
       </div>
+
+      <ImageLightbox
+        open={lightboxUrl !== null}
+        onOpenChange={(open) => {
+          if (!open) setLightboxUrl(null);
+        }}
+        media={lightboxUrl ? [{ url: lightboxUrl, type: "IMAGE" }] : []}
+      />
     </div>
   );
 }
