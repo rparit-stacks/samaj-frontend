@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Share2, Copy, MessageCircle, Mail, Facebook, Twitter, Linkedin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PUBLIC_SITE_URL, shareUrl as nativeShare } from "@/lib/shareLinks";
 
 interface ShareDialogProps {
   open: boolean;
@@ -22,18 +23,28 @@ export function ShareDialog({
   open,
   onOpenChange,
   title = "Check this out!",
-  url = "https://samaj.app/content/123",
+  url = PUBLIC_SITE_URL,
   onCopy,
 }: ShareDialogProps) {
   const { toast } = useToast();
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(url);
+  const handleCopy = async () => {
+    const result = await nativeShare({ url, title });
+    if (result === "failed") {
+      toast({
+        title: "Could not copy link",
+        description: "Please copy the link manually.",
+        variant: "destructive",
+      });
+      return;
+    }
     onCopy?.();
-    toast({
-      title: "Link Copied!",
-      description: "The link has been copied to your clipboard.",
-    });
+    if (result === "copied") {
+      toast({
+        title: "Link Copied!",
+        description: "The link has been copied to your clipboard.",
+      });
+    }
   };
 
   const shareOptions = [

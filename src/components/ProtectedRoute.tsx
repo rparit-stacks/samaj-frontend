@@ -1,6 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { BrandLogo } from "@/components/BrandLogo";
+import { AccountNotActiveScreen } from "@/components/AccountNotActiveScreen";
+import { OfflineScreen } from "@/components/OfflineScreen";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -32,15 +34,26 @@ function getUnauthRedirect(): string {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, isOffline, refreshUser, logout } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
     return <AuthSplash />;
   }
 
+  // Offline is checked before the auth redirect on purpose: failing to reach
+  // the server is not the same as being signed out, and bouncing the user to
+  // the login page (where they also cannot log in) would lose their session.
+  if (isOffline && !isAuthenticated) {
+    return <OfflineScreen onRetry={refreshUser} />;
+  }
+
   if (!isAuthenticated) {
     return <Navigate to={getUnauthRedirect()} state={{ from: location }} replace />;
+  }
+
+  if (user && user.status && user.status !== "ACTIVE") {
+    return <AccountNotActiveScreen status={user.status} onRefresh={refreshUser} onLogout={logout} />;
   }
 
   return <>{children}</>;

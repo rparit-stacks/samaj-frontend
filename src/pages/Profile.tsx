@@ -31,6 +31,7 @@ import { EditFamilyMemberDialog } from "@/components/dialogs/EditFamilyMemberDia
 import { ChangeBackgroundDialog } from "@/components/dialogs/ChangeBackgroundDialog";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useAuth } from "@/context/AuthContext";
+import { buildShareUrl, shareUrl } from "@/lib/shareLinks";
 import {
   communityApi,
   emergencyApi,
@@ -122,22 +123,10 @@ export default function Profile() {
 
   const handleShareProfile = async () => {
     const key = profile?.profileKey ?? user?.profileKey;
-    const path = key ? `/profile/${encodeURIComponent(key)}` : "/profile";
-    const url = `${window.location.origin}${path}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: "Samaj Profile", url });
-        return;
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Profile link copied");
-    } catch {
-      toast.error("Could not copy link");
-    }
+    const url = buildShareUrl(key ? `/profile/${encodeURIComponent(key)}` : "/profile");
+    const result = await shareUrl({ title: "Samaj Profile", url });
+    if (result === "copied") toast.success("Profile link copied");
+    else if (result === "failed") toast.error("Could not copy link");
   };
 
   const ProfileMobileHeader = (

@@ -129,15 +129,46 @@ export function clearAdminTokensClientSide() {
   clearAdminSessionExpiry();
 }
 
+/**
+ * Reads the `exp` claim out of a JWT without verifying it (the server is still
+ * the authority). Used as a fallback when no expiry was recorded at login.
+ */
+function jwtExpiryMs(token: string | null): number | null {
+  if (!token) return null;
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const exp = (JSON.parse(json) as { exp?: number }).exp;
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Proactive refresh: call periodically while the app is open so users rarely hit 401. */
 export function startSessionKeepAlive() {
   if (typeof window === "undefined") return () => {};
   const tick = () => {
     const refreshTok = localStorage.getItem("refreshToken");
+    if (!refreshTok) return;
+
+    // Prefer the recorded expiry, but fall back to the token's own `exp`.
+    // Some login paths (e.g. the Google callback) never recorded one, which
+    // used to disable the keep-alive entirely and let the token silently
+    // expire — every later write then failed with a 401.
     const expRaw = localStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
-    if (!refreshTok || !expRaw) return;
-    const exp = parseInt(expRaw, 10);
-    if (Number.isNaN(exp)) return;
+    const recorded = expRaw ? parseInt(expRaw, 10) : NaN;
+    const exp = Number.isNaN(recorded)
+      ? jwtExpiryMs(localStorage.getItem("accessToken"))
+      : recorded;
+
+    // Expiry completely unknown: refresh anyway so the session cannot go stale.
+    if (exp == null) {
+      void refreshToken();
+      return;
+    }
+
     const fiveMin = 5 * 60 * 1000;
     if (Date.now() > exp - fiveMin) {
       void refreshToken();
@@ -166,7 +197,26 @@ export function startAdminSessionKeepAlive() {
   return () => window.clearInterval(id);
 }
 
-let userRefreshInFlight: Promise<boolean> | null = null;
+/**
+ * Thrown when a request never reached the server (no signal, DNS failure,
+ * server unreachable). Callers use this to show an offline state rather than
+ * a generic failure — and it must never be mistaken for an auth failure.
+ */
+export class NetworkError extends Error {
+  readonly isNetworkError = true;
+
+  constructor(message = "No internet connection") {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+/** True for a connectivity failure, as opposed to a real server error. */
+export function isNetworkError(err: unknown): boolean {
+  return err instanceof NetworkError || (err as { isNetworkError?: boolean })?.isNetworkError === true;
+}
+
+let userRefreshInFlight: Promise<RefreshOutcome> | null = null;
 let adminRefreshInFlight: Promise<boolean> | null = null;
 
 /** True if `ref` is a UUID (member profile API accepts UUID or public profileKey). */
@@ -209,14 +259,21 @@ export async function api<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeader(),
-      ...options.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+        ...options.headers,
+      },
+    });
+  } catch {
+    // Network-level failure: no signal, DNS, server unreachable. This says
+    // nothing about the session, so never clear tokens here.
+    throw new NetworkError();
+  }
 
   // Check for maintenance mode (503 Service Unavailable)
   if (res.status === 503) {
@@ -228,9 +285,14 @@ export async function api<T>(
   }
 
   if (res.status === 401) {
-    const refreshed = await refreshToken();
-    if (refreshed) {
+    const outcome = await refreshTokenDetailed();
+    if (outcome === "ok") {
       return api(path, options);
+    }
+    if (outcome === "offline") {
+      // Could not reach the auth server — keep the session intact and let the
+      // caller surface an offline state instead of bouncing the user to login.
+      throw new NetworkError();
     }
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
@@ -246,13 +308,22 @@ export async function api<T>(
   return data;
 }
 
-async function refreshToken(): Promise<boolean> {
+/**
+ * Outcome of a refresh attempt.
+ *
+ * "offline" must stay distinct from "rejected": the phone simply having no
+ * signal is not proof the session ended, and treating it as one logs people
+ * out and destroys their tokens. Only an actual server rejection does that.
+ */
+export type RefreshOutcome = "ok" | "rejected" | "offline";
+
+async function refreshTokenDetailed(): Promise<RefreshOutcome> {
   if (userRefreshInFlight) {
     return userRefreshInFlight;
   }
-  userRefreshInFlight = (async () => {
+  userRefreshInFlight = (async (): Promise<RefreshOutcome> => {
     const refresh = localStorage.getItem("refreshToken");
-    if (!refresh) return false;
+    if (!refresh) return "rejected";
     try {
       const base = API_BASE || (typeof window !== "undefined" ? window.location.origin : "");
       const res = await fetch(`${base}/auth/refresh`, {
@@ -267,12 +338,18 @@ async function refreshToken(): Promise<boolean> {
           localStorage.setItem("refreshToken", data.refreshToken);
         }
         recordUserSessionExpiry(data.expiresIn as number | undefined);
-        return true;
+        return "ok";
       }
+      // The server answered and refused — the session really is over.
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        return "rejected";
+      }
+      // 5xx / gateway hiccup: keep the session and let the caller retry.
+      return "offline";
     } catch {
-      /* network / parse */
+      // fetch() throws only on network-level failure.
+      return "offline";
     }
-    return false;
   })();
   try {
     return await userRefreshInFlight;
@@ -281,9 +358,18 @@ async function refreshToken(): Promise<boolean> {
   }
 }
 
+async function refreshToken(): Promise<boolean> {
+  return (await refreshTokenDetailed()) === "ok";
+}
+
 /** Re-fetch access (+ optional new refresh) using the stored refresh token; single-flight with api(). */
 export async function refreshSession(): Promise<boolean> {
   return refreshToken();
+}
+
+/** Like {@link refreshSession} but distinguishes an offline failure from a rejection. */
+export async function refreshSessionDetailed(): Promise<RefreshOutcome> {
+  return refreshTokenDetailed();
 }
 
 async function refreshAdminToken(): Promise<boolean> {
@@ -760,22 +846,29 @@ async function uploadFile(path: string, file: File): Promise<CloudUploadResponse
   formData.append("file", file);
 
   const doRequest = async (): Promise<Response> => {
-    return fetch(url, {
-      method: "POST",
-      body: formData,
-      headers: {
-        // Do NOT set Content-Type manually for multipart; let the browser handle it
-        ...getAuthHeader(),
-      },
-    });
+    try {
+      return await fetch(url, {
+        method: "POST",
+        body: formData,
+        headers: {
+          // Do NOT set Content-Type manually for multipart; let the browser handle it
+          ...getAuthHeader(),
+        },
+      });
+    } catch {
+      throw new NetworkError();
+    }
   };
 
   let res = await doRequest();
 
   if (res.status === 401) {
-    const refreshed = await refreshToken();
-    if (refreshed) {
+    const outcome = await refreshTokenDetailed();
+    if (outcome === "ok") {
       res = await doRequest();
+    } else if (outcome === "offline") {
+      // Upload failed for lack of connectivity, not a dead session.
+      throw new NetworkError();
     } else {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
@@ -1848,6 +1941,9 @@ export interface CreateCommunityPostBody {
 }
 
 export const communityApi = {
+  /** Single post — backs shared/deep-linked /posts/:id URLs. */
+  getById: (postId: number) => api<CommunityPost>(`/api/v1/community/posts/${postId}`),
+
   list: (params?: { page?: number; size?: number; tag?: string; authorId?: string; savedOnly?: boolean }) => {
     const query = new URLSearchParams();
     if (params?.page != null) query.set("page", String(params.page));
@@ -1974,6 +2070,7 @@ export interface UserProfile {
   email?: string | null;
   phone?: string | null;
   bloodGroup?: string | null;
+  status?: string | null;
 }
 
 export interface FamilyMember {
@@ -2047,6 +2144,7 @@ export interface PublicProfileResponse {
   showEventsOnProfile: boolean;
   showCommunityOnProfile: boolean;
   showEmergenciesOnProfile: boolean;
+  status?: string | null;
 }
 
 export interface ContactInfoResponse {

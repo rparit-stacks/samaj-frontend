@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from "@/components/ui/dialog";
 import {
-  MessageSquare, Search, Plus, Users, Loader2, RefreshCw, UserRound, ChevronDown,
+  MessageSquare, Search, Plus, Users, Loader2, RefreshCw, UserRound, ChevronDown, X,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -80,11 +80,34 @@ export default function ChatList() {
     if (!conversations) return [];
     const q = search.toLowerCase().trim();
     if (!q) return conversations;
+    // Match the chat title, any participant, and the last message preview so
+    // searching for something you remember saying finds the conversation.
     return conversations.filter(c =>
       (c.name ?? "").toLowerCase().includes(q) ||
+      (c.lastMessagePreview ?? "").toLowerCase().includes(q) ||
       c.participants.some(p => p.displayName.toLowerCase().includes(q))
     );
   }, [conversations, search]);
+
+  // When the query matches nobody you already talk to, offer matching members
+  // so a new chat can be started without opening the "New message" dialog.
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const inlineMemberSearch = useQuery({
+    queryKey: ["users", "search", "chatInline", debouncedSearch],
+    queryFn: () => userApi.search(debouncedSearch, { page: 0, size: 10 }),
+    enabled: debouncedSearch.length >= 2,
+  });
+
+  const existingIds = useMemo(
+    () => new Set((conversations ?? []).flatMap(c => c.participants.map(p => p.userId))),
+    [conversations],
+  );
+  const memberSuggestions = useMemo(() => {
+    if (debouncedSearch.length < 2) return [];
+    return (inlineMemberSearch.data?.content ?? []).filter(
+      m => m.userId !== user?.id && !existingIds.has(m.userId),
+    );
+  }, [inlineMemberSearch.data, existingIds, user?.id, debouncedSearch]);
 
   const totalUnread = useMemo(() =>
     (conversations ?? []).reduce((sum, c) => sum + c.unreadCount, 0), [conversations]);
@@ -230,11 +253,21 @@ export default function ChatList() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search"
-                  className="h-10 rounded-full border-0 bg-muted/60 pl-9"
+                  placeholder="Search chats and people"
+                  className="h-10 rounded-full border-0 bg-muted/60 pl-9 pr-9"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+                {search && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -257,15 +290,19 @@ export default function ChatList() {
                   Retry
                 </Button>
               </div>
-            ) : filtered.length === 0 ? (
+            ) : filtered.length === 0 && memberSuggestions.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-6 py-20 text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-foreground">
                   <MessageSquare className="h-7 w-7" />
                 </div>
                 <div>
-                  <p className="font-semibold">{search ? "No conversations found" : "Your messages"}</p>
+                  <p className="font-semibold">{search ? "No results found" : "Your messages"}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {search ? "Try another name." : "Send a message to start a chat."}
+                    {search
+                      ? inlineMemberSearch.isLoading
+                        ? "Searching…"
+                        : "No chats or people match that name."
+                      : "Send a message to start a chat."}
                   </p>
                 </div>
                 {!search && (
@@ -280,6 +317,33 @@ export default function ChatList() {
                 {filtered.map((conv) => (
                   <ConversationRow key={conv.id} conv={conv} currentUserId={user?.id} />
                 ))}
+
+                {memberSuggestions.length > 0 && (
+                  <>
+                    <p className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Other people
+                    </p>
+                    {memberSuggestions.map((m) => (
+                      <button
+                        key={m.userId}
+                        type="button"
+                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 active:bg-muted/60"
+                        onClick={() => void startChatWithUser(m)}
+                      >
+                        <Avatar className="h-14 w-14 shrink-0">
+                          <AvatarImage src={m.avatarUrl ?? undefined} />
+                          <AvatarFallback className="bg-muted">{initials(m.fullName)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1 border-b border-border/40 py-2.5">
+                          <p className="truncate text-[15px] font-semibold">{m.fullName || "Member"}</p>
+                          <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                            {m.profileKey ? `@${m.profileKey}` : "Tap to start a chat"}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

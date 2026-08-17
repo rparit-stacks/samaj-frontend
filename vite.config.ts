@@ -6,8 +6,10 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   return {
-    // Relative asset paths required for Capacitor (android/ios WebView).
-    base: "./",
+    // Web (Vercel) needs absolute asset paths so deep links like /admin/login resolve
+    // assets from the site root. Capacitor's Android WebView needs relative paths
+    // (file-based origin), so the "android" mode keeps base: "./" — see cap:sync script.
+    base: mode === "android" ? "./" : "/",
     server: {
       host: "::",
       port: 5173,

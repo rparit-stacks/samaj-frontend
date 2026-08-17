@@ -51,11 +51,13 @@ export function useNotificationSocket(enabled: boolean) {
               (prev) => ({ unread: (prev?.unread ?? 0) + 1 }),
             );
 
-            // Prepend the new notification into the cached list if it's loaded
+            // Prepend into the cached list, skipping duplicates (the REST poll
+            // and this push can race and deliver the same notification twice).
             queryClient.setQueryData<{ content: NotificationDto[]; totalElements: number }>(
               ["notifications", "list"],
               (prev) => {
                 if (!prev) return prev;
+                if (prev.content.some((n) => n.id === data.notification.id)) return prev;
                 return {
                   ...prev,
                   content: [data.notification, ...prev.content],
@@ -63,11 +65,23 @@ export function useNotificationSocket(enabled: boolean) {
                 };
               },
             );
+
+            // Person-to-person notifications also change other screens, so
+            // refresh the lists they render rather than waiting for a poll.
+            const type = (data.notification.type ?? "").toUpperCase();
+            if (type === "CONTACT_REQUEST") {
+              void queryClient.invalidateQueries({ queryKey: ["contactRequests"] });
+              void queryClient.invalidateQueries({ queryKey: ["publicProfile"] });
+            }
           } catch {
             // Fallback: just invalidate so the next poll fetches fresh data
-            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            void queryClient.invalidateQueries({ queryKey: ["notifications"] });
           }
         });
+      },
+      onWebSocketError: () => {
+        // Connection trouble: fall back to refetching so the bell is not stale.
+        void queryClient.invalidateQueries({ queryKey: ["notifications"] });
       },
     });
 

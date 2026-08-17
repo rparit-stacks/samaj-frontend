@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { recordUserSessionExpiry } from "@/lib/api";
 import { Shield } from "lucide-react";
 
 /**
@@ -37,10 +38,13 @@ export default function AuthCallback() {
       const [k, v] = p.split("=");
       if (k && v) params[k] = decodeURIComponent(v);
     });
-    const { accessToken, refreshToken } = params;
+    const { accessToken, refreshToken, expiresIn } = params;
     if (accessToken) {
       localStorage.setItem("accessToken", accessToken);
       if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+      // Without this the keep-alive had no expiry to work from and never
+      // refreshed, so the token quietly expired and later writes hit 401.
+      recordUserSessionExpiry(expiresIn ? Number(expiresIn) : undefined);
       toast.success("Logged in with Google!");
       void refreshUser().finally(() => navigate("/", { replace: true }));
       return;

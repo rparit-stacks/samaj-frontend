@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { chatApi, cloudApi, type ChatConversationItem, type ChatMessageItem } from "@/lib/api";
+import { chatApi, cloudApi, userApi, type ChatConversationItem, type ChatMessageItem } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useChatSocket, type ChatWsEvent } from "@/hooks/useChatSocket";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -92,6 +92,19 @@ export default function ChatThread() {
     queryFn: () => chatApi.listConversations(),
     select: (list) => list.find(c => c.id === conversationId),
   });
+
+  // Messages carry the *sender's* avatar, which for my own messages is absent.
+  // Reuse the cached profile so my bubbles show my picture too.
+  const { data: myProfile } = useQuery({
+    queryKey: ["userProfile"],
+    queryFn: userApi.getProfile,
+    enabled: !!user,
+  });
+  const myAvatarUrl = myProfile?.avatarUrl ?? undefined;
+  const myDisplayName =
+    myProfile?.fullName ||
+    convInfo?.participants.find(p => p.userId === user?.id)?.displayName ||
+    "You";
 
   const {
     data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading,
@@ -400,26 +413,38 @@ export default function ChatThread() {
 
       {/* Messages area — abstract layered backdrop (no bitmap) */}
       <div className="flex-1 min-h-0 relative flex flex-col">
+        {/* Abstract chat backdrop: a soft tinted wash plus a repeating geometric
+            motif, drawn in CSS so it costs no image request and adapts to theme. */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-          <div className="absolute -top-20 -left-20 h-64 w-64 rounded-full bg-primary/[0.09] blur-3xl" />
-          <div className="absolute top-[28%] -right-24 h-72 w-72 rounded-full bg-violet-500/[0.07] blur-3xl" />
-          <div className="absolute bottom-0 left-1/3 h-48 w-96 rounded-full bg-cyan-500/[0.05] blur-3xl" />
           <div
-            className="absolute inset-0 opacity-[0.45] dark:opacity-[0.35]"
+            className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(165deg, hsl(var(--muted) / 0.35) 0%, transparent 42%, hsl(var(--muted) / 0.2) 100%)",
+                "radial-gradient(120% 80% at 15% 0%, hsl(var(--primary) / 0.10) 0%, transparent 55%)," +
+                "radial-gradient(100% 70% at 90% 20%, hsl(var(--primary) / 0.06) 0%, transparent 60%)," +
+                "linear-gradient(180deg, hsl(var(--muted) / 0.30) 0%, hsl(var(--background)) 70%)",
             }}
           />
+          {/* Interlocking diamond lattice — subtle enough to sit behind text. */}
           <div
-            className="absolute inset-0 opacity-[0.04] dark:opacity-[0.07]"
+            className="absolute inset-0 opacity-[0.055] dark:opacity-[0.09]"
             style={{
-              backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)`,
-              backgroundSize: "22px 22px",
+              backgroundImage:
+                "repeating-linear-gradient(45deg, hsl(var(--foreground)) 0 1px, transparent 1px 14px)," +
+                "repeating-linear-gradient(-45deg, hsl(var(--foreground)) 0 1px, transparent 1px 14px)",
+            }}
+          />
+          {/* Sparse dots layered over the lattice for depth. */}
+          <div
+            className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08]"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, hsl(var(--primary)) 1.1px, transparent 0)",
+              backgroundSize: "42px 42px",
             }}
           />
         </div>
-        <div className="relative flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-0.5">
+        <div className="relative flex-1 overflow-y-auto px-3 sm:px-4 py-3">
         {hasNextPage && (
           <div className="text-center py-2">
             <Button size="sm" variant="ghost" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
@@ -439,46 +464,56 @@ export default function ChatThread() {
           const seen = messageSeenByOthers(msg, isMine, convInfo, user?.id);
           const prevMsg = idx > 0 ? allMessages[idx - 1] : null;
           const showDate = !prevMsg || format(new Date(msg.createdAt), "yyyy-MM-dd") !== format(new Date(prevMsg.createdAt), "yyyy-MM-dd");
+          // Name label still only leads a new run, in group chats.
           const showSender = !isMine && convInfo?.type === "GROUP" && msg.senderId !== prevMsg?.senderId;
+          // Avatars, however, appear on every message on both sides — the
+          // sender's own picture is not carried on the message payload, so
+          // fall back to the logged-in user's profile photo.
+          const avatarUrl = isMine ? myAvatarUrl : msg.senderAvatarUrl ?? undefined;
+          const avatarName = isMine ? myDisplayName : msg.senderDisplayName;
+          // A bubble rendering only text reserves inline space for the time+ticks.
+          const isPlainText =
+            msg.deleted || !((msg.type === "IMAGE" || msg.type === "FILE") && msg.fileUrl);
 
           return (
             <div key={msg.id}>
               {showDate && (
-                <div className="flex justify-center my-4">
-                  <span className="text-xs font-medium text-muted-foreground bg-card/90 border border-border/60 shadow-sm px-4 py-1.5 rounded-full select-text">
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent to-border" />
+                  <span className="select-text rounded-full border border-border/60 bg-card/95 px-3.5 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground shadow-sm backdrop-blur">
                     {format(new Date(msg.createdAt), "MMM d, yyyy")}
                   </span>
+                  <div className="h-px flex-1 bg-gradient-to-l from-transparent to-border" />
                 </div>
               )}
               <div
                 className={cn(
                   "flex w-full group gap-2 items-end",
                   isMine ? "justify-end" : "justify-start",
+                  // Tight grouping between consecutive messages from one sender.
+                  prevMsg && prevMsg.senderId === msg.senderId && !showDate ? "mt-0.5" : "mt-2",
                 )}
               >
-                {/* Incoming: avatar column for alignment */}
+                {/* Incoming avatar — shown on every message, not just the first
+                    of a run, so it is always clear who is speaking. */}
                 {!isMine && (
-                  <div className="w-9 shrink-0 flex flex-col justify-end pb-1">
-                    {showSender ? (
-                      <Link
-                        to={`/user/${msg.senderId}`}
-                        className="rounded-full ring-2 ring-transparent hover:ring-primary/35 transition-all self-center"
-                        title={`${msg.senderDisplayName} — view profile`}
-                      >
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={msg.senderAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{initials(msg.senderDisplayName)}</AvatarFallback>
-                        </Avatar>
-                      </Link>
-                    ) : (
-                      <div className="w-8 h-8 shrink-0 mx-auto" aria-hidden />
-                    )}
-                  </div>
+                  <Link
+                    to={`/user/${msg.senderId}`}
+                    className="mb-0.5 shrink-0 rounded-full ring-2 ring-transparent transition-all hover:ring-primary/35"
+                    title={`${msg.senderDisplayName} — view profile`}
+                  >
+                    <Avatar className="h-8 w-8 shadow-sm ring-1 ring-border/50">
+                      <AvatarImage src={avatarUrl} alt={avatarName} />
+                      <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+                        {initials(avatarName)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Link>
                 )}
 
                 <div
                   className={cn(
-                    "flex flex-col min-w-0 max-w-[min(88vw,22rem)] sm:max-w-md",
+                    "flex flex-col min-w-0 max-w-[min(78vw,24rem)]",
                     isMine ? "items-end" : "items-start",
                   )}
                 >
@@ -490,12 +525,14 @@ export default function ChatThread() {
                       {msg.senderDisplayName}
                     </Link>
                   )}
+                  {/* WhatsApp bubble: hugs its content instead of filling the
+                      column, with the tail corner squared off on the sender side. */}
                   <div
                     className={cn(
-                      "rounded-[1.15rem] shadow-sm w-full overflow-hidden",
+                      "rounded-[0.5rem] shadow-sm overflow-hidden max-w-full w-fit",
                       isMine
-                        ? "bg-primary text-primary-foreground rounded-br-md ring-1 ring-primary/20"
-                        : "bg-card text-card-foreground border border-border/70 rounded-bl-md shadow-black/5",
+                        ? "bg-[hsl(var(--primary))] text-primary-foreground rounded-tr-none"
+                        : "bg-card text-card-foreground border border-border/70 rounded-tl-none shadow-black/5",
                       msg.deleted && "opacity-60 italic",
                     )}
                   >
@@ -517,7 +554,10 @@ export default function ChatThread() {
                     )}
 
                     {msg.deleted ? (
-                      <p className="text-sm px-3 py-2.5 select-text">This message was deleted</p>
+                      <p className="text-[14.5px] leading-[1.35] px-2.5 py-1.5 select-text">
+                        This message was deleted
+                        <span className="inline-block w-[4.25rem] h-0 align-bottom" aria-hidden />
+                      </p>
                     ) : msg.type === "IMAGE" && msg.fileUrl ? (
                       <div className={cn("overflow-hidden", isMine ? "bg-primary-foreground/[0.07]" : "bg-muted/40")}>
                         <button
@@ -567,21 +607,27 @@ export default function ChatThread() {
                         <Download className={cn("h-5 w-5 shrink-0", isMine ? "text-primary-foreground/80" : "text-muted-foreground")} />
                       </a>
                     ) : (
-                      <p className="text-[15px] leading-relaxed px-3.5 py-2.5 whitespace-pre-wrap break-words select-text">
+                      /* Text sits in a block with an inline-block spacer sized to
+                         the meta row, so a short message keeps the time on the
+                         same line and a long one wraps around it — as WhatsApp does. */
+                      <p className="text-[14.5px] leading-[1.35] px-2.5 py-1.5 whitespace-pre-wrap break-words select-text">
                         {msg.content}
+                        <span className="inline-block w-[4.25rem] h-0 align-bottom" aria-hidden />
                       </p>
                     )}
 
                     <div
                       className={cn(
-                        "flex items-center gap-1.5 px-3 pb-2 pt-0",
-                        isMine ? "justify-end" : "justify-start",
+                        "flex items-center justify-end gap-1 px-2.5 pb-1.5",
+                        // Only plain text reserves inline room for this row, so
+                        // only then should it be pulled up onto the last line.
+                        isPlainText ? "-mt-3.5" : "pt-0.5",
                       )}
                     >
                       <span
                         className={cn(
-                          "text-[10px] tabular-nums select-none",
-                          isMine ? "text-primary-foreground/55" : "text-muted-foreground",
+                          "text-[10.5px] tabular-nums select-none leading-none",
+                          isMine ? "text-primary-foreground/65" : "text-muted-foreground",
                         )}
                       >
                         {format(new Date(msg.createdAt), "HH:mm")}
@@ -590,12 +636,12 @@ export default function ChatThread() {
                         <span className="inline-flex" title={seen ? "Read" : "Delivered"}>
                           <CheckCheck
                             className={cn(
-                              "h-3.5 w-3.5 shrink-0",
+                              "h-[15px] w-[15px] shrink-0",
                               seen
-                                ? "text-sky-200 dark:text-sky-300"
-                                : "text-primary-foreground/45",
+                                ? "text-sky-300 dark:text-sky-300"
+                                : "text-primary-foreground/50",
                             )}
-                            strokeWidth={2.4}
+                            strokeWidth={2.6}
                           />
                         </span>
                       )}
@@ -634,7 +680,21 @@ export default function ChatThread() {
                   </div>
                 </div>
 
-                {isMine && <div className="w-0 sm:w-1 shrink-0" aria-hidden />}
+                {/* Outgoing avatar, mirroring the incoming side. */}
+                {isMine && (
+                  <Link
+                    to="/profile"
+                    className="mb-0.5 shrink-0 rounded-full ring-2 ring-transparent transition-all hover:ring-primary/35"
+                    title="View your profile"
+                  >
+                    <Avatar className="h-8 w-8 shadow-sm ring-1 ring-border/50">
+                      <AvatarImage src={avatarUrl} alt={avatarName} />
+                      <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
+                        {initials(avatarName)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Link>
+                )}
               </div>
             </div>
           );
@@ -665,8 +725,9 @@ export default function ChatThread() {
         </div>
       )}
 
-      {/* Input bar */}
-      <div className="flex items-end gap-2 px-3 py-2.5 border-t bg-card/95 backdrop-blur-md shrink-0 pb-safe-bottom shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.08)]">
+      {/* Input bar — WhatsApp style: one rounded field carrying the attachment
+          controls, with the send button as a separate circle beside it. */}
+      <div className="flex items-end gap-1.5 px-2 py-2 bg-transparent shrink-0 pb-safe-bottom">
         <input
           ref={fileInputRef}
           type="file"
@@ -674,61 +735,68 @@ export default function ChatThread() {
           accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt"
           onChange={handleFileSelect}
         />
-        <button
-          type="button"
-          className="p-2.5 rounded-full hover:bg-muted text-muted-foreground"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          title="Attach file"
-        >
-          {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
-        </button>
-        <button
-          type="button"
-          className="p-2.5 rounded-full hover:bg-muted text-muted-foreground"
-          onClick={() => {
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = "image/*";
-            input.onchange = (e) => {
-              const file = (e.target as HTMLInputElement).files?.[0];
-              if (file) {
-                const fakeEvent = { target: { files: [file], value: "" } } as any;
-                handleFileSelect(fakeEvent);
-              }
-            };
-            input.click();
-          }}
-          disabled={uploading}
-          title="Send image"
-        >
-          <ImageIcon className="h-5 w-5" />
-        </button>
-        <textarea
-          ref={inputRef}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            if (e.target.value.trim()) sendTypingThrottled();
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message…"
-          rows={1}
-          className="flex-1 resize-none bg-muted/50 border border-border/50 rounded-2xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary/30 max-h-32"
-          style={{ minHeight: "42px" }}
-        />
+
+        <div className="flex flex-1 items-end gap-1 rounded-[1.6rem] border border-border/60 bg-card px-1.5 py-1 shadow-sm">
+          <textarea
+            ref={inputRef}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (e.target.value.trim()) sendTypingThrottled();
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Message"
+            rows={1}
+            className="flex-1 resize-none bg-transparent px-2.5 py-2 text-[15px] outline-none max-h-32 placeholder:text-muted-foreground"
+            style={{ minHeight: "38px" }}
+          />
+          <button
+            type="button"
+            className="mb-0.5 shrink-0 rounded-full p-2 text-muted-foreground hover:bg-muted disabled:opacity-50"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Attach file"
+            title="Attach file"
+          >
+            {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5 -rotate-45" />}
+          </button>
+          <button
+            type="button"
+            className="mb-0.5 shrink-0 rounded-full p-2 text-muted-foreground hover:bg-muted disabled:opacity-50"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (file) {
+                  const fakeEvent = { target: { files: [file], value: "" } } as any;
+                  handleFileSelect(fakeEvent);
+                }
+              };
+              input.click();
+            }}
+            disabled={uploading}
+            aria-label="Send image"
+            title="Send image"
+          >
+            <ImageIcon className="h-5 w-5" />
+          </button>
+        </div>
+
         <button
           type="button"
           className={cn(
-            "p-2.5 rounded-full transition-colors",
+            "mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all active:scale-95",
             text.trim()
-              ? "bg-primary text-primary-foreground hover:bg-primary/90"
-              : "bg-muted text-muted-foreground"
+              ? "bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
+              : "bg-muted text-muted-foreground",
           )}
           onClick={handleSendText}
           disabled={!text.trim() || sendMutation.isPending}
+          aria-label="Send message"
         >
-          <Send className="h-5 w-5" />
+          <Send className="h-5 w-5 translate-x-[1px]" />
         </button>
       </div>
     </div>

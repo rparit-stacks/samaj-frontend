@@ -26,6 +26,7 @@ import {
   UserPlus,
   Droplets,
   Briefcase,
+  RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EditProfileDialog } from "@/components/dialogs/EditProfileDialog";
@@ -36,6 +37,7 @@ import { useAuth } from "@/context/AuthContext";
 import { userApi, eventsApi, communityApi, emergencyApi, chatApi } from "@/lib/api";
 import type { CommunityPost, CommunityPostMedia, EmergencyItem, EventItem, PublicProfileResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { buildShareUrl } from "@/lib/shareLinks";
 
 function initialsOf(name: string): string {
   return name
@@ -67,7 +69,7 @@ export default function MemberDetail() {
   const [contactRequestOpen, setContactRequestOpen] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
 
-  const { data: profile, isLoading, error, isError } = useQuery({
+  const { data: profile, isLoading, error, isError, refetch, isFetching } = useQuery({
     queryKey: ["publicProfile", id],
     queryFn: () => userApi.getPublicProfileByRef(id!),
     enabled: !!id,
@@ -120,7 +122,7 @@ export default function MemberDetail() {
       : profile?.userId
         ? `/user/${profile.userId}`
         : "";
-    return `${window.location.origin}${path}`;
+    return buildShareUrl(path);
   })();
 
   const handleKey = profile?.profileKey ?? id ?? "";
@@ -225,6 +227,31 @@ export default function MemberDetail() {
             </p>
             <Button variant="outline" className="rounded-xl" onClick={() => navigate(-1)}>
               Go back
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (profile.status && profile.status !== "ACTIVE") {
+    return (
+      <AppLayout mobileHeader={<></>}>
+        <div className="bg-background pb-nav-safe">
+          <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+            <div className="mx-auto flex h-12 max-w-lg items-center px-3">
+              <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate(-1)}>
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-20 text-center">
+            <p className="font-semibold text-destructive">
+              Your profile is not active yet. Please contact the admin or check back later.
+            </p>
+            <Button variant="outline" className="gap-2 rounded-xl" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
           </div>
         </div>

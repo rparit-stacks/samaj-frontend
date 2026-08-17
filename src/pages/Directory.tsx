@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyDirectory } from "@/components/ui/empty-state";
+import { openAction } from "@/lib/directoryActions";
 import { directoryApi, type DirectoryProfileSummary, type DirectoryActionDto } from "@/lib/api";
 
 function getInitials(name: string): string {
@@ -34,19 +35,29 @@ function getActionIcon(type: string) {
   }
 }
 
-function getActionHref(action: DirectoryActionDto): string {
-  const t = action.type.toUpperCase();
-  if (t === "CALL") return `tel:${action.value.replace(/\s/g, "")}`;
-  if (t === "EMAIL") return `mailto:${action.value}`;
-  if (t === "WHATSAPP") {
-    const d = action.value.replace(/\D/g, "");
-    const num = d.startsWith("91") && d.length >= 12 ? d : d.length === 10 ? "91" + d : d;
-    return `https://wa.me/${num}`;
-  }
-  return action.value.startsWith("http") ? action.value : `https://${action.value}`;
-}
-
 type ViewMode = "grid" | "list";
+
+/**
+ * Renders one directory action as a real button. It sits inside a Link, so the
+ * click must be stopped from bubbling up into the card navigation.
+ */
+function ActionButton({ action }: { action: DirectoryActionDto }) {
+  return (
+    <button
+      type="button"
+      title={action.label}
+      aria-label={action.label}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openAction(action);
+      }}
+      className="p-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+    >
+      {getActionIcon(action.type)}
+    </button>
+  );
+}
 
 export default function Directory() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,10 +70,20 @@ export default function Directory() {
 
   const filteredMembers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return members;
-    return (members as DirectoryProfileSummary[]).filter(
-      (m) => (m.fullName ?? "").toLowerCase().includes(q) || (m.city ?? "").toLowerCase().includes(q)
-    );
+    if (!q) return members as DirectoryProfileSummary[];
+    // Every whitespace-separated term must match somewhere, so "ram jaipur"
+    // finds Ram in Jaipur rather than everyone named Ram or living in Jaipur.
+    const terms = q.split(/\s+/);
+    return (members as DirectoryProfileSummary[]).filter((m) => {
+      const haystack = [
+        m.fullName ?? "",
+        m.city ?? "",
+        ...m.actions.map((a) => a.value ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return terms.every((t) => haystack.includes(t));
+    });
   }, [members, searchQuery]);
 
   return (
@@ -170,17 +191,7 @@ function GridView({ members }: { members: DirectoryProfileSummary[] }) {
               {m.actions.length > 0 && (
                 <div className="flex gap-1 mt-1">
                   {m.actions.slice(0, 3).map((a, i) => (
-                    <span
-                      key={i}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        window.open(getActionHref(a), a.type.toUpperCase() === "CALL" ? "_self" : "_blank");
-                      }}
-                      className="p-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer transition-colors"
-                    >
-                      {getActionIcon(a.type)}
-                    </span>
+                    <ActionButton key={i} action={a} />
                   ))}
                   {m.actions.length > 3 && (
                     <span className="p-1.5 text-xs text-muted-foreground">+{m.actions.length - 3}</span>
@@ -218,17 +229,7 @@ function ListView({ members }: { members: DirectoryProfileSummary[] }) {
           </div>
           <div className="flex gap-1 shrink-0">
             {m.actions.slice(0, 3).map((a, i) => (
-              <span
-                key={i}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.open(getActionHref(a), a.type.toUpperCase() === "CALL" ? "_self" : "_blank");
-                }}
-                className="p-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer transition-colors"
-              >
-                {getActionIcon(a.type)}
-              </span>
+              <ActionButton key={i} action={a} />
             ))}
           </div>
         </Link>

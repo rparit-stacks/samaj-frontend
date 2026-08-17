@@ -5,6 +5,8 @@ import {
   deviceTokenApi,
   recordUserSessionExpiry,
   refreshSession,
+  refreshSessionDetailed,
+  isNetworkError,
   startSessionKeepAlive,
   type AuthResponse,
   type LoginChallenge,
@@ -66,6 +68,12 @@ interface AuthContextValue {
   user: UserResponse | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /**
+   * True when the session could not be verified because the device is offline.
+   * Tokens are deliberately kept in this state — the UI should prompt the user
+   * to check their connection and retry, never send them back to login.
+   */
+  isOffline: boolean;
   /** Step 1: password login. Returns "challenge" when the server requires an OTP. */
   login: (identifier: string, password: string) => Promise<LoginResult>;
   /** Step 2: OTP login, called after a challenge to complete the session. */
@@ -81,6 +89,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOffline, setOffline] = useState(false);
 
   const refreshUser = useCallback(async () => {
     let access = localStorage.getItem("accessToken");
@@ -91,14 +100,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // If only refresh token is present (or access was cleared), mint access first.
     // Otherwise the boot effect skipped refreshUser entirely and every reload looked logged out.
+    /** Drop the session only when the server actually rejected it. */
+    const clearSession = () => {
+      setUser(null);
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("accessTokenExpiresAt");
+      localStorage.removeItem("samajUserId");
+    };
+
     if (!access && refresh) {
-      const ok = await refreshSession();
-      if (!ok) {
-        setUser(null);
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("accessTokenExpiresAt");
-        localStorage.removeItem("samajUserId");
+      const outcome = await refreshSessionDetailed();
+      if (outcome === "offline") {
+        // No connectivity — keep the tokens so the session survives until the
+        // network is back. Signing the user out here would be wrong.
+        setOffline(true);
+        return;
+      }
+      if (outcome === "rejected") {
+        clearSession();
         return;
       }
       access = localStorage.getItem("accessToken");
@@ -106,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loadMe = async () => {
       const u = await authApi.me();
       setUser(u);
+      setOffline(false);
       if (u?.id) {
         localStorage.setItem("samajUserId", u.id);
       }
@@ -113,23 +134,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     try {
       await loadMe();
-    } catch {
-      const recovered = await refreshSession();
-      if (recovered) {
+    } catch (err) {
+      if (isNetworkError(err)) {
+        setOffline(true);
+        return;
+      }
+      const outcome = await refreshSessionDetailed();
+      if (outcome === "ok") {
         try {
           await loadMe();
           return;
-        } catch {
-          /* e.g. network — keep tokens, show logged out until retry */
-          setUser(null);
+        } catch (retryErr) {
+          if (isNetworkError(retryErr)) setOffline(true);
           return;
         }
       }
-      setUser(null);
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("accessTokenExpiresAt");
-      localStorage.removeItem("samajUserId");
+      if (outcome === "offline") {
+        setOffline(true);
+        return;
+      }
+      clearSession();
     }
   }, []);
 
@@ -211,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        isOffline,
         login,
         loginWithOtp,
         completeSession,

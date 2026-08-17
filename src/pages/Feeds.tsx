@@ -39,6 +39,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
+import { buildShareUrl } from "@/lib/shareLinks";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -52,7 +53,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function PostCard({
+export function PostCard({
   post,
   onLike,
   onSave,
@@ -233,6 +234,29 @@ function PostCard({
         </DropdownMenu>
       </div>
 
+      {/* Text-only post → tweet layout: the body leads, sized for reading,
+          with no image frame and no repeated author name. */}
+      {!hasMedia && (
+        <div
+          className="px-3 pb-1 pl-[3.75rem] -mt-1"
+          onDoubleClick={handleLike}
+        >
+          {post.content?.trim() && (
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-normal text-foreground">
+              {post.content.trim()}
+            </p>
+          )}
+          {post.emojiCodes.length > 0 && (
+            <p className="mt-1 text-xl leading-tight">{post.emojiCodes.join(" ")}</p>
+          )}
+          {post.tags.length > 0 && (
+            <p className="mt-1.5 text-[14px] text-primary">
+              {post.tags.map((t) => `#${t.name}`).join(" ")}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Media first (IG style) */}
       {hasMedia && (
         <div className="relative bg-muted/30">
@@ -312,8 +336,8 @@ function PostCard({
         initialIndex={lightboxIndex}
       />
 
-      {/* Actions */}
-      <div className="px-2 pt-1">
+      {/* Actions. Tweet-style posts indent to line up under the body text. */}
+      <div className={cn("pt-1", hasMedia ? "px-2" : "px-2 pl-[3.25rem]")}>
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <button
@@ -373,7 +397,10 @@ function PostCard({
             </p>
           )}
 
-          {(post.content?.trim() || post.tags.length > 0 || post.emojiCodes.length > 0) && (
+          {/* Caption. Only media posts get the Instagram "author + caption"
+              treatment — for text posts the body already sits under the header
+              like a tweet, so repeating the name there would read as noise. */}
+          {hasMedia && (post.content?.trim() || post.tags.length > 0 || post.emojiCodes.length > 0) && (
             <div className="text-[13px] leading-snug">
               {post.content?.trim() && (
                 <p className="whitespace-pre-wrap">
@@ -734,7 +761,7 @@ export default function Feeds() {
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
         title="Check out this post!"
-        url={`${window.location.origin}/posts/${selectedPostId ?? ""}`}
+        url={buildShareUrl(`/posts/${selectedPostId ?? ""}`)}
         onCopy={async () => {
           if (selectedPostId != null) {
             try {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -26,9 +26,12 @@ import {
   Save,
   Eye,
   EyeOff,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { directoryApi, type DirectoryActionDto, type DirectorySettings } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { directoryApi, type DirectorySettings } from "@/lib/api";
 
 const ACTION_TYPES = [
   { value: "CALL", label: "Phone Call", icon: <Phone className="h-4 w-4" /> },
@@ -61,6 +64,35 @@ interface ActionRow {
   value: string;
 }
 
+/** True when the row's value makes sense for its type. Blank is treated as "not filled in yet". */
+function validateAction(a: ActionRow): boolean {
+  const v = a.value.trim();
+  if (!v) return true;
+  switch (a.type) {
+    case "CALL":
+    case "WHATSAPP": {
+      const digits = v.replace(/\D/g, "");
+      return digits.length >= 10 && digits.length <= 15;
+    }
+    case "EMAIL":
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+    default:
+      return /^(https?:\/\/)?[\w-]+(\.[\w-]+)+([/?#][^\s]*)?$/i.test(v);
+  }
+}
+
+function validationMessage(type: string): string {
+  switch (type) {
+    case "CALL":
+    case "WHATSAPP":
+      return "Enter a valid phone number (10–15 digits).";
+    case "EMAIL":
+      return "Enter a valid email address.";
+    default:
+      return "Enter a valid URL, e.g. https://example.com";
+  }
+}
+
 export default function DirectorySettingsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -73,30 +105,52 @@ export default function DirectorySettingsPage() {
   const [visible, setVisible] = useState(true);
   const [actions, setActions] = useState<ActionRow[]>([]);
   const [dirty, setDirty] = useState(false);
+  const hydratedRef = useRef(false);
 
+  // Hydrate the form from the server exactly once. Re-seeding on every refetch
+  // would throw away edits the user is in the middle of making.
   useEffect(() => {
-    if (settings) {
-      setVisible(settings.visible);
-      setActions(
-        settings.actions.map((a) => ({ type: a.type, label: a.label, value: a.value }))
-      );
-      setDirty(false);
-    }
+    if (!settings || hydratedRef.current) return;
+    hydratedRef.current = true;
+    setVisible(settings.visible);
+    setActions(settings.actions.map((a) => ({ type: a.type, label: a.label, value: a.value })));
+    setDirty(false);
   }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: (data: DirectorySettings) => directoryApi.updateMySettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["directory"] });
+    onSuccess: (saved) => {
+      // Trust the server's normalised response (it drops blanks and renumbers
+      // sortOrder) so the form shows exactly what was persisted.
+      queryClient.setQueryData(["directory", "mySettings"], saved);
+      setVisible(saved.visible);
+      setActions(saved.actions.map((a) => ({ type: a.type, label: a.label, value: a.value })));
       setDirty(false);
+      // Refresh the directory list/detail so the change is visible immediately.
+      void queryClient.invalidateQueries({ queryKey: ["directory", "members"] });
+      void queryClient.invalidateQueries({ queryKey: ["directory", "profile"] });
       toast({ title: "Settings saved", description: "Your directory preferences have been updated." });
     },
-    onError: () => {
-      toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
+    onError: (err: unknown) => {
+      toast({
+        title: "Save failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
+  const invalidRows = actions.filter((a) => a.value.trim() && !validateAction(a));
+
   const handleSave = () => {
+    if (invalidRows.length > 0) {
+      toast({
+        title: "Check your action buttons",
+        description: "One or more entries are not valid for the selected type.",
+        variant: "destructive",
+      });
+      return;
+    }
     const payload: DirectorySettings = {
       visible,
       actions: actions
@@ -162,11 +216,11 @@ export default function DirectorySettingsPage() {
           </div>
           <Button
             onClick={handleSave}
-            disabled={!dirty || saveMutation.isPending}
+            disabled={!dirty || invalidRows.length > 0 || saveMutation.isPending}
             className="gap-2"
           >
             <Save className="h-4 w-4" />
-            {saveMutation.isPending ? "Saving…" : "Save"}
+            {saveMutation.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
           </Button>
         </div>
 
@@ -222,62 +276,84 @@ export default function DirectorySettingsPage() {
                 No action buttons configured. Click "Add" to create one.
               </p>
             )}
-            {actions.map((action, index) => (
-              <div key={index} className="flex items-start gap-2 p-3 rounded-lg border bg-muted/30">
-                <button
-                  className="mt-2 text-muted-foreground hover:text-foreground cursor-grab"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => moveAction(index, index - 1)}
-                  disabled={index === 0}
-                >
-                  <GripVertical className="h-4 w-4" />
-                </button>
-                <div className="flex-1 space-y-2">
-                  <div className="flex gap-2">
-                    <div className="w-36">
-                      <Select
-                        value={action.type}
-                        onValueChange={(v) => updateAction(index, "type", v)}
-                      >
-                        <SelectTrigger className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ACTION_TYPES.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>
-                              <span className="flex items-center gap-2">
-                                {t.icon}
-                                {t.label}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Button label"
-                        value={action.label}
-                        onChange={(e) => updateAction(index, "label", e.target.value)}
-                        className="h-9"
-                      />
-                    </div>
+            {actions.map((action, index) => {
+              const isValid = validateAction(action);
+              return (
+                <div key={index} className="flex items-start gap-2 p-3 rounded-lg border bg-muted/30">
+                  <div className="mt-1 flex flex-col items-center text-muted-foreground">
+                    <button
+                      type="button"
+                      aria-label="Move up"
+                      className="p-0.5 hover:text-foreground disabled:opacity-30"
+                      onClick={() => moveAction(index, index - 1)}
+                      disabled={index === 0}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <GripVertical className="h-3.5 w-3.5 opacity-50" />
+                    <button
+                      type="button"
+                      aria-label="Move down"
+                      className="p-0.5 hover:text-foreground disabled:opacity-30"
+                      onClick={() => moveAction(index, index + 1)}
+                      disabled={index === actions.length - 1}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   </div>
-                  <Input
-                    placeholder={getPlaceholder(action.type)}
-                    value={action.value}
-                    onChange={(e) => updateAction(index, "value", e.target.value)}
-                    className="h-9"
-                  />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex gap-2">
+                      <div className="w-36">
+                        <Select
+                          value={action.type}
+                          onValueChange={(v) => updateAction(index, "type", v)}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ACTION_TYPES.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>
+                                <span className="flex items-center gap-2">
+                                  {t.icon}
+                                  {t.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Button label"
+                          value={action.label}
+                          onChange={(e) => updateAction(index, "label", e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    <Input
+                      placeholder={getPlaceholder(action.type)}
+                      value={action.value}
+                      onChange={(e) => updateAction(index, "value", e.target.value)}
+                      className={cn("h-9", !isValid && "border-destructive focus-visible:ring-destructive")}
+                      aria-invalid={!isValid}
+                    />
+                    {!isValid && (
+                      <p className="text-xs text-destructive">{validationMessage(action.type)}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Remove action"
+                    onClick={() => removeAction(index)}
+                    className="mt-2 text-destructive hover:text-destructive/80 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => removeAction(index)}
-                  className="mt-2 text-destructive hover:text-destructive/80 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       </div>

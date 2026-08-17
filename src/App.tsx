@@ -8,6 +8,9 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
+import { OpenInAppBanner } from "@/components/OpenInAppBanner";
+import { OfflineBanner } from "@/components/OfflineScreen";
+import { isNetworkError } from "@/lib/api";
 import { AdminProtectedRoute } from "@/components/admin/AdminProtectedRoute";
 import { AdminParentRoute } from "@/components/admin/AdminParentRoute";
 import Index from "./pages/Index";
@@ -28,6 +31,7 @@ import Settings from "./pages/Settings";
 import Emergency from "./pages/Emergency";
 import CreateEmergencyPage from "./pages/CreateEmergency";
 import Feeds from "./pages/Feeds";
+import PostDetail from "./pages/PostDetail";
 import Gallery from "./pages/Gallery";
 import GalleryMy from "./pages/GalleryMy";
 import Documents from "./pages/Documents";
@@ -112,7 +116,22 @@ import ChildSafety from "./pages/auth/ChildSafety";
 import DeleteAccount from "./pages/auth/DeleteAccount";
 import MaintenanceMode from "./pages/MaintenanceMode";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Retrying while offline just burns battery and delays the error state.
+      // React Query refetches automatically once the browser is back online.
+      retry: (failureCount, error) => {
+        if (isNetworkError(error)) return false;
+        return failureCount < 2;
+      },
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
 
 function UserAuthLayout() {
   return (
@@ -176,6 +195,8 @@ const App = () => {
           }}
         >
           <DeepLinkHandler />
+          <OfflineBanner />
+          <OpenInAppBanner />
           <Routes>
             {/* Admin Portal - separate auth (no user AuthProvider mounted) */}
             <Route path="/install" element={<AdminInstall />} />
@@ -258,6 +279,7 @@ const App = () => {
               <Route path="/emergency" element={<ProtectedRoute><Emergency /></ProtectedRoute>} />
               <Route path="/emergency/create" element={<ProtectedRoute><CreateEmergencyPage /></ProtectedRoute>} />
               <Route path="/feeds" element={<ProtectedRoute><Feeds /></ProtectedRoute>} />
+              <Route path="/posts/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
               <Route path="/gallery" element={<ProtectedRoute><Gallery /></ProtectedRoute>} />
               <Route path="/gallery/me" element={<ProtectedRoute><GalleryMy /></ProtectedRoute>} />
               <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />

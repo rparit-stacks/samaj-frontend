@@ -25,6 +25,7 @@ import { eventsApi, userApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { ShareDialog } from "@/components/dialogs/ShareDialog";
+import { buildShareUrl } from "@/lib/shareLinks";
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +33,7 @@ export default function EventDetail() {
   const { toast } = useToast();
   const [shareOpen, setShareOpen] = useState(false);
   const eventId = id ? parseInt(id, 10) : NaN;
-  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/events/${eventId}` : "";
+  const shareUrl = buildShareUrl(`/events/${eventId}`);
 
   const { data: event, isLoading, error } = useQuery({
     queryKey: ["event", eventId],

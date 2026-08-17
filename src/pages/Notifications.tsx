@@ -6,21 +6,58 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Bell, Newspaper, AlertTriangle, CheckCircle, Clock, Trash2, Briefcase,
-  Settings2, Users, Calendar, Image, FileText, Megaphone, Trophy,
+  Settings2, Users, Calendar, Image, Megaphone, Trophy, UserPlus, MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notificationApi, type NotificationDto, type NotificationPreferences } from "@/lib/api";
 
-const typeConfig = {
-  info: { icon: Newspaper, color: "bg-blue-500/10 text-blue-600" },
-  jobs: { icon: Briefcase, color: "bg-violet-500/10 text-violet-700" },
-  emergency: { icon: AlertTriangle, color: "bg-destructive/10 text-destructive" },
-  system: { icon: CheckCircle, color: "bg-emerald-500/10 text-emerald-700" },
-} as const;
+/** Per-type icon + colour so each notification is recognisable at a glance. */
+const TYPE_STYLES: Record<string, { icon: typeof Bell; color: string }> = {
+  CONTACT_REQUEST: { icon: UserPlus, color: "bg-pink-500/10 text-pink-600" },
+  COMMUNITY: { icon: Users, color: "bg-blue-500/10 text-blue-600" },
+  EVENT: { icon: Calendar, color: "bg-amber-500/10 text-amber-600" },
+  NEWS: { icon: Newspaper, color: "bg-sky-500/10 text-sky-600" },
+  ALERT: { icon: AlertTriangle, color: "bg-destructive/10 text-destructive" },
+  SECURITY: { icon: AlertTriangle, color: "bg-destructive/10 text-destructive" },
+  SYSTEM: { icon: Megaphone, color: "bg-emerald-500/10 text-emerald-700" },
+  JOB: { icon: Briefcase, color: "bg-violet-500/10 text-violet-700" },
+  ACHIEVEMENT: { icon: Trophy, color: "bg-yellow-500/10 text-yellow-600" },
+  INFO: { icon: Image, color: "bg-teal-500/10 text-teal-600" },
+  MESSAGE: { icon: MessageSquare, color: "bg-indigo-500/10 text-indigo-600" },
+};
+
+const FALLBACK_STYLE = { icon: Bell, color: "bg-muted text-muted-foreground" };
+
+const NOTIFICATION_TABS = [
+  { value: "all", label: "All" },
+  { value: "people", label: "People" },
+  { value: "community", label: "Community" },
+  { value: "emergency", label: "Emergency" },
+  { value: "system", label: "System" },
+] as const;
+
+function styleForType(rawType: string | null | undefined) {
+  const t = (rawType ?? "").toUpperCase();
+  if (TYPE_STYLES[t]) return TYPE_STYLES[t];
+  // Types are free-form strings on the backend; match known prefixes too.
+  const prefix = Object.keys(TYPE_STYLES).find((k) => t.startsWith(k));
+  return prefix ? TYPE_STYLES[prefix] : FALLBACK_STYLE;
+}
+
+/** Tab -> which types belong in it. */
+const TAB_FILTERS: Record<string, (t: string) => boolean> = {
+  all: () => true,
+  people: (t) => t === "CONTACT_REQUEST" || t === "MESSAGE",
+  community: (t) =>
+    t === "COMMUNITY" || t === "EVENT" || t === "NEWS" || t === "ACHIEVEMENT" || t === "INFO",
+  emergency: (t) => t === "ALERT" || t === "SECURITY",
+  system: (t) => t === "SYSTEM" || t.startsWith("JOB"),
+};
 
 const NOTIFICATION_TYPES = [
+  { key: "CONTACT_REQUEST", label: "Contact Requests", desc: "When someone wants to connect", icon: UserPlus },
   { key: "COMMUNITY", label: "Community Posts", desc: "New posts from community members", icon: Users },
   { key: "EVENT",     label: "Events",          desc: "New events created by members",    icon: Calendar },
   { key: "NEWS",      label: "News & Articles",  desc: "Published news articles",          icon: Newspaper },
@@ -110,16 +147,13 @@ export default function Notifications() {
     prefsMutation.mutate({ ...prefs, disabledTypes: Array.from(current) });
   }
 
-  const filterNotifications = (tab: "all" | "info" | "emergency" | "system") => {
-    if (tab === "all") return notifications;
-    if (tab === "emergency") return notifications.filter((n) => n.type === "SECURITY" || n.type === "ALERT");
-    if (tab === "system") return notifications.filter((n) => n.type === "SYSTEM");
-    return notifications.filter((n) => {
-      const t = n.type || "";
-      if (t === "INFO") return true;
-      return t.startsWith("JOB");
-    });
+  const filterNotifications = (tab: string) => {
+    const match = TAB_FILTERS[tab] ?? TAB_FILTERS.all;
+    return notifications.filter((n) => match((n.type ?? "").toUpperCase()));
   };
+
+  /** Unread count per tab, so each tab can show its own badge. */
+  const unreadFor = (tab: string) => filterNotifications(tab).filter((n) => !n.read).length;
 
   return (
     <AppLayout title="Notifications">
@@ -159,41 +193,38 @@ export default function Notifications() {
         {/* Tabs */}
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-nowrap justify-start">
-            <TabsTrigger value="all" className="gap-1">
-              All
-              {unreadCount > 0 && (
-                <Badge className="bg-primary text-primary-foreground text-xs ml-1">{unreadCount}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="info">Info</TabsTrigger>
-            <TabsTrigger value="emergency">Emergency</TabsTrigger>
-            <TabsTrigger value="system">System</TabsTrigger>
+            {NOTIFICATION_TABS.map(({ value, label }) => {
+              const count = unreadFor(value);
+              return (
+                <TabsTrigger key={value} value={value} className="gap-1">
+                  {label}
+                  {count > 0 && (
+                    <Badge className="bg-primary text-primary-foreground text-xs ml-1">{count}</Badge>
+                  )}
+                </TabsTrigger>
+              );
+            })}
             <TabsTrigger value="preferences" className="gap-1">
               <Settings2 className="h-3.5 w-3.5" />
               Preferences
             </TabsTrigger>
           </TabsList>
 
-          {(["all", "info", "emergency", "system"] as const).map((tabValue) => (
+          {NOTIFICATION_TABS.map(({ value: tabValue }) => (
             <TabsContent key={tabValue} value={tabValue} className="mt-6">
               <div className="bg-card rounded-2xl shadow-card overflow-hidden divide-y divide-border">
                 {filterNotifications(tabValue).length === 0 ? (
                   <div className="text-center py-12">
                     <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No notifications</p>
+                    <p className="text-muted-foreground">
+                      {tabValue === "all"
+                        ? "No notifications yet"
+                        : "Nothing here yet"}
+                    </p>
                   </div>
                 ) : (
                   filterNotifications(tabValue).map((notification: NotificationDto) => {
-                    const t = notification.type || "";
-                    const configKey =
-                      t === "SECURITY" || t === "ALERT"
-                        ? "emergency"
-                        : t === "SYSTEM"
-                          ? "system"
-                          : t.startsWith("JOB")
-                            ? "jobs"
-                            : "info";
-                    const config = typeConfig[configKey];
+                    const config = styleForType(notification.type);
                     const Icon = config.icon;
 
                     const linkTo = notification.link?.trim() || "/notifications";

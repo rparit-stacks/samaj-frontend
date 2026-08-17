@@ -15,7 +15,8 @@ import {
   Briefcase,
   Droplets,
 } from "lucide-react";
-import { directoryApi, type DirectoryActionDto } from "@/lib/api";
+import { openAction } from "@/lib/directoryActions";
+import { directoryApi } from "@/lib/api";
 
 function getInitials(name: string): string {
   return name.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -30,22 +31,6 @@ function getActionIcon(type: string) {
   }
 }
 
-function getActionHref(action: DirectoryActionDto): string {
-  const t = action.type.toUpperCase();
-  if (t === "CALL") return `tel:${action.value.replace(/\s/g, "")}`;
-  if (t === "EMAIL") return `mailto:${action.value}`;
-  if (t === "WHATSAPP") {
-    const d = action.value.replace(/\D/g, "");
-    const num = d.startsWith("91") && d.length >= 12 ? d : d.length === 10 ? "91" + d : d;
-    return `https://wa.me/${num}`;
-  }
-  return action.value.startsWith("http") ? action.value : `https://${action.value}`;
-}
-
-function shouldOpenNewTab(type: string): boolean {
-  const t = type.toUpperCase();
-  return t === "WHATSAPP" || t === "LINK";
-}
 
 export default function DirectoryProfile() {
   const { id } = useParams<{ id: string }>();
@@ -176,26 +161,18 @@ export default function DirectoryProfile() {
                 Quick Actions
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {profile.actions.map((action, i) => {
-                  const href = getActionHref(action);
-                  const newTab = shouldOpenNewTab(action.type);
-                  return (
-                    <Button
-                      key={i}
-                      variant="outline"
-                      className="gap-2 justify-start"
-                      asChild
-                    >
-                      <a
-                        href={href}
-                        {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                      >
-                        {getActionIcon(action.type)}
-                        <span className="truncate">{action.label}</span>
-                      </a>
-                    </Button>
-                  );
-                })}
+                {profile.actions.map((action, i) => (
+                  <Button
+                    key={i}
+                    type="button"
+                    variant="outline"
+                    className="gap-2 justify-start"
+                    onClick={() => openAction(action)}
+                  >
+                    {getActionIcon(action.type)}
+                    <span className="truncate">{action.label}</span>
+                  </Button>
+                ))}
               </div>
             </div>
           )}
